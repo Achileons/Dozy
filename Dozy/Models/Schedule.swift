@@ -28,6 +28,9 @@ final class Schedule {
 
     var medication: Medication?
 
+    @Relationship(deleteRule: .cascade, inverse: \Dose.schedule)
+    var doses: [Dose]? = []
+
     init(
         times: [Date] = [],
         repeatRule: RepeatRule = .daily,
@@ -35,7 +38,8 @@ final class Schedule {
         intervalDays: Int = 1,
         startDate: Date = Date(),
         endDate: Date? = nil,
-        medication: Medication? = nil
+        medication: Medication? = nil,
+        doses: [Dose]? = []
     ) {
         self.times = times
         self.repeatRule = repeatRule
@@ -44,5 +48,6 @@ final class Schedule {
         self.startDate = startDate
         self.endDate = endDate
         self.medication = medication
+        self.doses = doses
     }
 }

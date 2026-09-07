@@ -15,8 +15,8 @@ enum DoseGenerator {
     // MARK: - Generation
 
     /// Creates the doses `schedule` implies between `startDate` and `endDate` (both inclusive,
-    /// compared by day). Days that already hold a dose for the same medication and the same
-    /// point in time are left untouched, so calling this repeatedly is safe.
+    /// compared by day). Slots this schedule already holds a dose for are left untouched, so
+    /// calling this repeatedly is safe.
     ///
     /// The caller is responsible for saving `context`.
     static func generateDoses(
@@ -43,9 +43,9 @@ enum DoseGenerator {
         let lastDay = calendar.startOfDay(for: endDate)
         guard firstDay <= lastDay else { return }
 
-        // Existing doses of this medication, keyed by whole second, to detect duplicates.
+        // Existing doses of this schedule, keyed by whole second, to detect duplicates.
         var takenSlots = Set<Int>()
-        for dose in medication.doses ?? [] where !dose.isDeleted {
+        for dose in schedule.doses ?? [] where !dose.isDeleted {
             takenSlots.insert(slotKey(for: dose.scheduledAt))
         }
 
@@ -72,7 +72,8 @@ enum DoseGenerator {
                     scheduledAt: scheduledAt,
                     status: .pending,
                     notificationID: UUID().uuidString,
-                    medication: medication
+                    medication: medication,
+                    schedule: schedule
                 )
                 context.insert(dose)
             }
@@ -80,17 +81,19 @@ enum DoseGenerator {
     }
 
     /// Rebuilds the upcoming doses of `schedule` after it was edited: every still pending dose
-    /// from today onwards is dropped and regenerated, while doses the user already acted on
-    /// (`.taken` / `.skipped`) are kept as history.
+    /// of this schedule from today onwards is dropped and regenerated, while doses the user
+    /// already acted on (`.taken` / `.skipped`) are kept as history. Doses belonging to the
+    /// medication's other schedules are never touched.
     ///
     /// The caller is responsible for saving `context`.
     static func regenerateFutureDoses(for schedule: Schedule, context: ModelContext) {
-        guard let medication = schedule.medication else { return }
+        // Nothing to regenerate without a medication, so nothing may be deleted either.
+        guard schedule.medication != nil else { return }
 
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
 
-        for dose in medication.doses ?? []
+        for dose in schedule.doses ?? []
         where !dose.isDeleted && dose.status == .pending && dose.scheduledAt >= today {
             context.delete(dose)
         }

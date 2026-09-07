@@ -23,18 +23,21 @@ final class Dose {
     var notificationID: String = ""
 
     var medication: Medication?
+    var schedule: Schedule?
 
     init(
         scheduledAt: Date = Date(),
         status: DoseStatus = .pending,
         takenAt: Date? = nil,
         notificationID: String = "",
-        medication: Medication? = nil
+        medication: Medication? = nil,
+        schedule: Schedule? = nil
     ) {
         self.scheduledAt = scheduledAt
         self.status = status
         self.takenAt = takenAt
         self.notificationID = notificationID
         self.medication = medication
+        self.schedule = schedule
     }
 }

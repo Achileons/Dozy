@@ -28,6 +28,14 @@ struct DozyApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .task {
+                    // The result is not branched on: syncScheduledNotifications checks the
+                    // permission itself and clears any stale requests when it was refused.
+                    _ = await NotificationManager.requestAuthorization()
+                    await NotificationManager.syncScheduledNotifications(
+                        context: sharedModelContainer.mainContext
+                    )
+                }
         }
         .modelContainer(sharedModelContainer)
     }
