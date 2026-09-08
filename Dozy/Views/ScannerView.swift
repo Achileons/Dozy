@@ -97,7 +97,7 @@ struct ScannerView: View {
             .padding(.horizontal, Spacing.lg)
             .padding(.vertical, Spacing.md)
             .background(
-                Palette.accentFill.opacity(0.85),
+                Palette.accentFill.opacity(Opacity.scrim),
                 in: Capsule()
             )
             .padding(.bottom, Spacing.xxl)
@@ -105,12 +105,10 @@ struct ScannerView: View {
 
     private func notice(icon: String, title: String, detail: String) -> some View {
         VStack(spacing: Spacing.md) {
-            Image(systemName: icon)
-                .font(.system(size: Layout.statusIcon))
-                .foregroundStyle(Palette.secondaryText)
+            EmptyIcon(systemName: icon)
 
             Text(title)
-                .font(Typography.itemTitle)
+                .font(Typography.emptyTitle)
                 .foregroundStyle(Palette.primaryText)
                 .multilineTextAlignment(.center)
 

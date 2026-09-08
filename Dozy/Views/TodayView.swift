@@ -61,15 +61,16 @@ private struct DayDoseList: View {
             Palette.surface.ignoresSafeArea()
 
             if medications.isEmpty {
-                EmptyState(message: "Henüz ilaç yok") { isAddingMedication = true }
-            } else if doses.isEmpty {
-                EmptyMessage(message: "Bugün için doz yok")
+                EmptyState(icon: "pills.fill", message: "Henüz ilaç yok") {
+                    isAddingMedication = true
+                }
             } else {
                 list
             }
         }
-        .navigationTitle(day.formatted(.dateTime.day().month(.wide).locale(.turkish)))
-        .navigationSubtitle(summary)
+        // The greeting is the title here; the bar only carries the button.
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             // Hidden while the large button below is on screen, so there is only ever one
             // way to add a medication from here.
@@ -80,6 +81,7 @@ private struct DayDoseList: View {
                     } label: {
                         Image(systemName: "plus")
                             .font(Typography.control)
+                            .foregroundStyle(Palette.accent)
                             .frame(width: Layout.minTouchTarget, height: Layout.minTouchTarget)
                     }
                     .accessibilityLabel("İlaç ekle")
@@ -97,22 +99,137 @@ private struct DayDoseList: View {
         }
     }
 
+    /// The header scrolls with the doses rather than sitting above them, so a long day
+    /// does not lose a third of the screen to a greeting.
     private var list: some View {
         List {
-            ForEach(doses) { dose in
-                DoseRow(
-                    dose: dose,
-                    onEditMedication: { medicationBeingEdited = $0 },
-                    onArchiveMedication: { medicationPendingArchive = $0 }
-                )
+            header
+                .listRowInsets(EdgeInsets(
+                    top: Spacing.sm, leading: Spacing.lg,
+                    bottom: Spacing.lg, trailing: Spacing.lg
+                ))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+
+            if doses.isEmpty {
+                EmptyMessage(icon: "cup.and.saucer.fill", message: "Bugün için doz yok")
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            } else {
+                ForEach(doses) { dose in
+                    DoseRow(
+                        dose: dose,
+                        onEditMedication: { medicationBeingEdited = $0 },
+                        onArchiveMedication: { medicationPendingArchive = $0 }
+                    )
+                }
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
     }
 
+    // MARK: - Header
+
+    private var header: some View {
+        HStack(alignment: .center, spacing: Spacing.lg) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text(greeting)
+                    .font(Typography.screenTitle)
+                    .foregroundStyle(Palette.primaryText)
+
+                Text(day.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(.turkish)))
+                    .font(Typography.itemDetail)
+                    .foregroundStyle(Palette.secondaryText)
+
+                if !doses.isEmpty {
+                    Text(summary)
+                        .font(Typography.itemDetail)
+                        .foregroundStyle(isComplete ? Palette.taken : Palette.secondaryText)
+                        .padding(.top, Spacing.xs)
+                        .contentTransition(.numericText())
+                }
+            }
+
+            Spacer(minLength: Spacing.sm)
+
+            if !doses.isEmpty {
+                ProgressRing(taken: takenCount, total: doses.count)
+            }
+        }
+        .animation(Motion.spring, value: takenCount)
+    }
+
+    /// Chosen by the hour, so the screen greets rather than labels.
+    private var greeting: String {
+        switch Calendar.current.component(.hour, from: Date()) {
+        case 5..<12: "Günaydın"
+        case 12..<18: "İyi günler"
+        default: "İyi akşamlar"
+        }
+    }
+
+    private var takenCount: Int {
+        doses.count { $0.status == .taken }
+    }
+
+    private var isComplete: Bool {
+        !doses.isEmpty && takenCount == doses.count
+    }
+
     private var summary: String {
-        let takenCount = doses.count { $0.status == .taken }
-        return "\(takenCount)/\(doses.count) alındı"
+        isComplete ? "Bugünlük hepsi tamam" : "\(takenCount)/\(doses.count) doz alındı"
+    }
+}
+
+// MARK: - Progress ring
+
+/// How far through the day's doses the user is, as an arc in the signature colour. Once the
+/// arc closes, the count inside gives way to a tick.
+private struct ProgressRing: View {
+    let taken: Int
+    let total: Int
+
+    private var fraction: Double {
+        total > 0 ? Double(taken) / Double(total) : 0
+    }
+
+    private var isComplete: Bool {
+        total > 0 && taken == total
+    }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Palette.ringTrack, lineWidth: Layout.progressStroke)
+
+            Circle()
+                .trim(from: 0, to: fraction)
+                .stroke(
+                    Palette.accent,
+                    style: StrokeStyle(lineWidth: Layout.progressStroke, lineCap: .round)
+                )
+                // Arcs grow from the top, clockwise, the way a clock fills.
+                .rotationEffect(.degrees(-90))
+                .animation(Motion.spring, value: fraction)
+
+            if isComplete {
+                Image(systemName: "checkmark")
+                    .font(Typography.ringValue)
+                    .foregroundStyle(Palette.accent)
+                    .transition(.scale.combined(with: .opacity))
+            } else {
+                Text("\(taken)/\(total)")
+                    .font(Typography.ringValue)
+                    .foregroundStyle(Palette.primaryText)
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+            }
+        }
+        .frame(width: Layout.progressRing, height: Layout.progressRing)
+        .animation(Motion.spring, value: isComplete)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isComplete ? "Bugünkü dozların hepsi alındı" : "\(taken) / \(total) doz alındı")
     }
 }

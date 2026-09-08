@@ -22,6 +22,7 @@ struct CalendarView: View {
                     onMoveMonth: move(by:)
                 )
                 .id(visibleMonth)
+                .transition(Motion.monthTransition)
             }
             .navigationTitle(visibleMonth.formatted(.dateTime.month(.wide).year().locale(.turkish)))
             .toolbar {
@@ -42,6 +43,7 @@ struct CalendarView: View {
         } label: {
             Image(systemName: systemImage)
                 .font(Typography.control)
+                .foregroundStyle(Palette.accent)
                 .frame(width: Layout.minTouchTarget, height: Layout.minTouchTarget)
         }
         .accessibilityLabel(label)
@@ -55,7 +57,7 @@ struct CalendarView: View {
             return
         }
 
-        withAnimation(.snappy) {
+        withAnimation(Motion.gentle) {
             visibleMonth = month
 
             let today = calendar.startOfDay(for: Date())
@@ -125,7 +127,7 @@ private struct MonthContent: View {
             HStack(spacing: Spacing.xs) {
                 ForEach(Self.weekdayOrder, id: \.self) { weekday in
                     Text(ScheduleSummary.symbol(forWeekday: weekday) ?? "")
-                        .font(Typography.meta)
+                        .font(Typography.weekday)
                         .foregroundStyle(Palette.secondaryText)
                         .frame(maxWidth: .infinity)
                 }
@@ -144,7 +146,7 @@ private struct MonthContent: View {
                             isSelected: date == selectedDay
                         )
                         .onTapGesture {
-                            withAnimation(.snappy) { selectedDay = date }
+                            withAnimation(Motion.spring) { selectedDay = date }
                         }
                     } else {
                         Color.clear.frame(height: Layout.dayCell)
@@ -185,7 +187,7 @@ private struct MonthContent: View {
                 } label: {
                     Image(systemName: "plus")
                         .font(Typography.control)
-                        .foregroundStyle(Palette.primaryText)
+                        .foregroundStyle(Palette.accent)
                         .frame(width: Layout.minTouchTarget, height: Layout.minTouchTarget)
                 }
                 .buttonStyle(.plain)
@@ -332,35 +334,40 @@ private struct DayCell: View {
     let isSelected: Bool
 
     var body: some View {
-        Text(date, format: .dateTime.day())
-            .font(Typography.itemDetail)
-            .fontWeight(isToday ? .bold : .regular)
-            .foregroundStyle(Palette.primaryText)
-            .monospacedDigit()
-            .frame(maxWidth: .infinity, minHeight: Layout.dayCell)
-            .background {
-                RoundedRectangle(cornerRadius: Layout.controlCorner, style: .continuous)
-                    .fill(status.fill)
-            }
-            // Selection is drawn as a ring rather than a fill, so picking a day never hides
-            // the colour that day was reporting.
-            .overlay {
-                RoundedRectangle(cornerRadius: Layout.controlCorner, style: .continuous)
-                    .strokeBorder(borderColor, lineWidth: borderWidth)
-            }
-            .contentShape(RoundedRectangle(cornerRadius: Layout.controlCorner, style: .continuous))
-            .accessibilityElement(children: .combine)
-            .accessibilityValue(status.accessibilityTitle ?? "")
-            .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-    }
+        ZStack {
+            // The wash for how the day went, and over it the ring for whether it is the
+            // one being looked at — so picking a day never hides what it was reporting.
+            Circle()
+                .fill(status.fill)
 
-    private var borderColor: Color {
-        if isSelected { return Palette.accentFill }
-        return isToday ? Palette.pending : .clear
-    }
+            Circle()
+                .strokeBorder(
+                    isSelected ? Palette.accent : .clear,
+                    lineWidth: Layout.selectedBorder
+                )
 
-    private var borderWidth: CGFloat {
-        isSelected ? Layout.selectedBorder : Layout.border
+            Text(date, format: .dateTime.day())
+                .font(Typography.dayNumber)
+                .fontWeight(isToday ? .bold : .regular)
+                .foregroundStyle(Palette.primaryText)
+                .monospacedDigit()
+        }
+        .frame(width: Layout.dayCell, height: Layout.dayCell)
+        // Today is marked by weight and a dot rather than by a fill, so the fill is left
+        // free to say how the day is going.
+        .overlay(alignment: .bottom) {
+            if isToday {
+                Circle()
+                    .fill(Palette.accent)
+                    .frame(width: Layout.todayDot, height: Layout.todayDot)
+                    .padding(.bottom, Spacing.xs)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .contentShape(Circle())
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(status.accessibilityTitle ?? "")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }
 

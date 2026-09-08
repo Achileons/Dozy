@@ -27,6 +27,8 @@ struct ContentView: View {
                 MedicationListView()
             }
         }
+        // The selected tab, toggles, pickers and links all take the signature colour.
+        .tint(Palette.accent)
     }
 }
 

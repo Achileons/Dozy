@@ -20,10 +20,13 @@ struct DoseRow: View {
         card
             .contentShape(RoundedRectangle(cornerRadius: Layout.cardCorner, style: .continuous))
             .onTapGesture {
-                withAnimation(.snappy) {
+                withAnimation(Motion.spring) {
                     MedicationActions.toggle(dose, context: modelContext)
                 }
             }
+            // A light tap under the thumb whenever the state actually changes, whichever
+            // gesture caused it.
+            .sensoryFeedback(.impact(weight: .light), trigger: dose.status)
             .contextMenu { menu }
             .listRowInsets(EdgeInsets(
                 top: Spacing.sm, leading: Spacing.lg,
@@ -49,6 +52,7 @@ struct DoseRow: View {
                 .font(.system(size: Layout.statusIcon))
                 .foregroundStyle(dose.status.tint)
                 .contentTransition(.symbolEffect(.replace))
+                .symbolEffect(.bounce, value: dose.status)
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 HStack(spacing: Spacing.sm) {
@@ -78,7 +82,7 @@ struct DoseRow: View {
         .frame(minHeight: Layout.minTouchTarget)
         // Only the content recedes once a dose is handled; the card surface itself stays
         // opaque so the row does not turn muddy against the background.
-        .opacity(dose.status == .pending ? 1 : 0.55)
+        .opacity(dose.status == .pending ? 1 : Opacity.settled)
         .dozyCard()
         .accessibilityElement(children: .combine)
         .accessibilityValue(dose.status.accessibilityTitle)
@@ -106,7 +110,7 @@ struct DoseRow: View {
     }
 
     private func setStatus(_ status: DoseStatus) {
-        withAnimation(.snappy) {
+        withAnimation(Motion.spring) {
             MedicationActions.setStatus(status, for: dose, context: modelContext)
         }
     }
@@ -136,16 +140,33 @@ struct AddMedicationButton: View {
     }
 }
 
-/// One line and one large button — nothing to read, one thing to do.
+/// A large symbol in the signature colour, so an empty screen still has something warm on it.
+struct EmptyIcon: View {
+    let systemName: String
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.system(size: Layout.emptyIcon, weight: .light))
+            .foregroundStyle(Palette.accent)
+            .symbolRenderingMode(.hierarchical)
+    }
+}
+
+/// An icon, one line and one large button — nothing to read, one thing to do.
 struct EmptyState: View {
+    let icon: String
     let message: String
     let action: () -> Void
 
     var body: some View {
         VStack(spacing: Spacing.xl) {
-            Text(message)
-                .font(Typography.itemTitle)
-                .foregroundStyle(Palette.secondaryText)
+            VStack(spacing: Spacing.md) {
+                EmptyIcon(systemName: icon)
+
+                Text(message)
+                    .font(Typography.emptyTitle)
+                    .foregroundStyle(Palette.primaryText)
+            }
 
             AddMedicationButton(action: action)
         }
@@ -156,13 +177,18 @@ struct EmptyState: View {
 /// A screen that is empty for the moment rather than empty for good: there are medications,
 /// today simply has nothing to show. No button, because the bar already carries one.
 struct EmptyMessage: View {
+    let icon: String
     let message: String
 
     var body: some View {
-        Text(message)
-            .font(Typography.itemTitle)
-            .foregroundStyle(Palette.secondaryText)
-            .padding(Spacing.xl)
+        VStack(spacing: Spacing.md) {
+            EmptyIcon(systemName: icon)
+
+            Text(message)
+                .font(Typography.emptyTitle)
+                .foregroundStyle(Palette.primaryText)
+        }
+        .padding(Spacing.xl)
     }
 }
 

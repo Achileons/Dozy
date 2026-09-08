@@ -24,7 +24,9 @@ struct MedicationListView: View {
                 Palette.surface.ignoresSafeArea()
 
                 if medications.isEmpty {
-                    EmptyState(message: "Henüz ilaç yok") { isAddingMedication = true }
+                    EmptyState(icon: "pills.fill", message: "Henüz ilaç yok") {
+                        isAddingMedication = true
+                    }
                 } else {
                     list
                 }
@@ -37,6 +39,7 @@ struct MedicationListView: View {
                     } label: {
                         Image(systemName: "plus")
                             .font(Typography.control)
+                            .foregroundStyle(Palette.accent)
                             .frame(width: Layout.minTouchTarget, height: Layout.minTouchTarget)
                     }
                     .accessibilityLabel("İlaç ekle")

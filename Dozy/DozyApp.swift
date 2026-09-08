@@ -10,6 +10,12 @@ import SwiftData
 
 @main
 struct DozyApp: App {
+    init() {
+        // Navigation bar titles are the one text SwiftUI cannot style, so they are set
+        // through UIKit before the first bar is drawn.
+        Appearance.apply()
+    }
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Medication.self,

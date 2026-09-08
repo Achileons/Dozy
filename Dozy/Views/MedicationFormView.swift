@@ -117,7 +117,7 @@ struct MedicationFormView: View {
         }
         .sheet(item: $timeBeingAdded) { slot in
             TimePickerSheet(initialTime: slot.date) { time in
-                withAnimation(.snappy) { times.append(TimeSlot(date: time)) }
+                withAnimation(Motion.spring) { times.append(TimeSlot(date: time)) }
             }
         }
         .archiveMedicationConfirmation(medication: $medicationPendingArchive) { medication in
@@ -138,8 +138,8 @@ struct MedicationFormView: View {
                         isScanning = true
                     } label: {
                         Image(systemName: "qrcode.viewfinder")
-                            .font(.title3)
-                            .foregroundStyle(Palette.primaryText)
+                            .font(Typography.inlineIcon)
+                            .foregroundStyle(Palette.accent)
                             .frame(width: Layout.minTouchTarget, height: Layout.minTouchTarget)
                     }
                     .buttonStyle(.plain)
@@ -159,7 +159,7 @@ struct MedicationFormView: View {
             }
         }
         .onChange(of: name) { _, _ in
-            withAnimation(.snappy) { scanNotice = nil }
+            withAnimation(Motion.gentle) { scanNotice = nil }
         }
     }
 
@@ -174,7 +174,7 @@ struct MedicationFormView: View {
                     HStack(spacing: Spacing.sm) {
                         ForEach(DosageUnit.allCases) { unit in
                             SelectableChip(title: unit.title, isOn: unit == dosageUnit) {
-                                withAnimation(.snappy) { dosageUnit = unit }
+                                withAnimation(Motion.spring) { dosageUnit = unit }
                             }
                         }
                     }
@@ -239,10 +239,10 @@ struct MedicationFormView: View {
                         Spacer()
 
                         Button {
-                            withAnimation(.snappy) { times.removeAll { $0.id == slot.id } }
+                            withAnimation(Motion.spring) { times.removeAll { $0.id == slot.id } }
                         } label: {
                             Image(systemName: "minus.circle")
-                                .font(.title3)
+                                .font(Typography.inlineIcon)
                                 .foregroundStyle(Palette.missed)
                                 .frame(
                                     width: Layout.minTouchTarget,
@@ -276,7 +276,7 @@ struct MedicationFormView: View {
     private var repeatCard: some View {
         FormCard(title: "Tekrar") {
             VStack(alignment: .leading, spacing: Spacing.lg) {
-                Picker("Tekrar kuralı", selection: $repeatRule.animation(.snappy)) {
+                Picker("Tekrar kuralı", selection: $repeatRule.animation(Motion.gentle)) {
                     Text("Her gün").tag(RepeatRule.daily)
                     Text("Günler").tag(RepeatRule.specificWeekdays)
                     Text("Aralıklı").tag(RepeatRule.everyNDays)
@@ -290,7 +290,7 @@ struct MedicationFormView: View {
                                 title: ScheduleSummary.symbol(forWeekday: weekday) ?? "",
                                 isOn: weekdays.contains(weekday)
                             ) {
-                                withAnimation(.snappy) {
+                                withAnimation(Motion.spring) {
                                     if weekdays.contains(weekday) {
                                         weekdays.remove(weekday)
                                     } else {
@@ -324,7 +324,7 @@ struct MedicationFormView: View {
 
                 Divider()
 
-                Toggle("Bitiş", isOn: $hasEndDate.animation(.snappy))
+                Toggle("Bitiş", isOn: $hasEndDate.animation(Motion.gentle))
                     .font(Typography.itemDetail)
                     .frame(minHeight: Layout.minTouchTarget)
 
@@ -353,7 +353,7 @@ struct MedicationFormView: View {
                 )
                 .overlay {
                     RoundedRectangle(cornerRadius: Layout.cardCorner, style: .continuous)
-                        .strokeBorder(Palette.missed.opacity(0.4), lineWidth: Layout.border)
+                        .strokeBorder(Palette.missed.opacity(Opacity.softBorder), lineWidth: Layout.border)
                 }
         }
         .buttonStyle(.plain)
@@ -362,7 +362,7 @@ struct MedicationFormView: View {
     private var stockCard: some View {
         FormCard(title: "Stok") {
             VStack(spacing: Spacing.xs) {
-                Toggle("Stok takibi", isOn: $stockEnabled.animation(.snappy))
+                Toggle("Stok takibi", isOn: $stockEnabled.animation(Motion.gentle))
                     .font(Typography.itemDetail)
                     .frame(minHeight: Layout.minTouchTarget)
 
@@ -401,18 +401,18 @@ struct MedicationFormView: View {
     /// product is actually found, and even then every field stays editable.
     private func handleScan(_ result: ScanResult?) {
         guard let result else {
-            withAnimation(.snappy) { scanNotice = "Kod okunamadı, adı elle girebilirsin" }
+            withAnimation(Motion.gentle) { scanNotice = "Kod okunamadı, adı elle girebilirsin" }
             return
         }
 
         guard let productName = MedicationDatabase.shared.lookup(barcode: result.barcode) else {
-            withAnimation(.snappy) {
+            withAnimation(Motion.gentle) {
                 scanNotice = "Bu ilaç veritabanında bulunamadı, adı elle girebilirsin"
             }
             return
         }
 
-        withAnimation(.snappy) {
+        withAnimation(Motion.spring) {
             scanNotice = nil
             name = productName
             gtin = result.barcode
