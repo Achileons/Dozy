@@ -9,11 +9,14 @@ import SwiftData
 /// Every medication the user keeps, with its schedule summarised underneath.
 struct MedicationListView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Medication.name, order: .forward) private var medications: [Medication]
+    /// Archived medications are gone from the user's point of view; only their doses
+    /// linger, on the days they were recorded.
+    @Query(filter: #Predicate<Medication> { !$0.isArchived }, sort: \Medication.name, order: .forward)
+    private var medications: [Medication]
 
     @State private var isAddingMedication = false
     @State private var medicationBeingEdited: Medication?
-    @State private var medicationPendingDeletion: Medication?
+    @State private var medicationPendingArchive: Medication?
 
     var body: some View {
         NavigationStack {
@@ -47,8 +50,8 @@ struct MedicationListView: View {
         .sheet(item: $medicationBeingEdited) { medication in
             MedicationFormView(medication: medication)
         }
-        .deleteMedicationConfirmation(medication: $medicationPendingDeletion) { medication in
-            MedicationActions.delete(medication, context: modelContext)
+        .archiveMedicationConfirmation(medication: $medicationPendingArchive) { medication in
+            MedicationActions.archive(medication, context: modelContext)
         }
     }
 
@@ -62,8 +65,8 @@ struct MedicationListView: View {
                         Button("Düzenle", systemImage: "pencil") {
                             medicationBeingEdited = medication
                         }
-                        Button("Sil", systemImage: "trash", role: .destructive) {
-                            medicationPendingDeletion = medication
+                        Button("Kaldır", systemImage: "archivebox", role: .destructive) {
+                            medicationPendingArchive = medication
                         }
                     }
                     .listRowInsets(EdgeInsets(
@@ -74,9 +77,9 @@ struct MedicationListView: View {
                     .listRowSeparator(.hidden)
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                         Button(role: .destructive) {
-                            medicationPendingDeletion = medication
+                            medicationPendingArchive = medication
                         } label: {
-                            Label("Sil", systemImage: "trash")
+                            Label("Kaldır", systemImage: "archivebox")
                         }
                     }
             }
@@ -154,7 +157,9 @@ enum ScheduleSummary {
             return ordered.compactMap(symbol(forWeekday:)).joined(separator: ", ")
 
         case .everyNDays:
-            return schedule.intervalDays <= 1 ? "Her gün" : "\(schedule.intervalDays) günde bir"
+            // An interval of one is every day, and saying so plainly beats "1 günde bir".
+            let interval = max(1, schedule.intervalDays)
+            return interval == 1 ? "Her gün" : "\(interval) günde bir"
         }
     }
 
@@ -186,18 +191,13 @@ enum ScheduleSummary {
     let samples: [(String, String, String, RepeatRule, [Date], [Int])] = [
         ("Parol", "500 mg, 1 tablet", "#E4572E", .daily, [morning, evening], []),
         ("D Vitamini", "1000 IU", "#F3A712", .specificWeekdays, [morning], [2, 4, 6]),
-        ("Omega 3", "2 kapsül", "#2E9E6B", .everyNDays, [evening], [])
+        ("Omega 3", "2 kapsül", "#2E9E6B", .daily, [evening], [])
     ]
 
     for (name, dosage, hex, rule, times, weekdays) in samples {
         let medication = Medication(name: name, dosage: dosage, colorHex: hex)
         container.mainContext.insert(medication)
-        let schedule = Schedule(
-            times: times,
-            repeatRule: rule,
-            weekdays: weekdays,
-            intervalDays: rule == .everyNDays ? 3 : 1
-        )
+        let schedule = Schedule(times: times, repeatRule: rule, weekdays: weekdays)
         container.mainContext.insert(schedule)
         schedule.medication = medication
     }

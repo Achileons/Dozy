@@ -25,18 +25,11 @@ enum DoseGenerator {
         to endDate: Date,
         context: ModelContext
     ) {
-        guard let medication = schedule.medication else { return }
+        guard let medication = schedule.medication, !medication.isArchived else { return }
         guard !schedule.times.isEmpty else { return }
 
-        // Rules that can never produce a dose.
-        switch schedule.repeatRule {
-        case .daily:
-            break
-        case .specificWeekdays:
-            guard !schedule.weekdays.isEmpty else { return }
-        case .everyNDays:
-            guard schedule.intervalDays >= 1 else { return }
-        }
+        // A weekday rule without a single weekday can never produce a dose.
+        if schedule.repeatRule == .specificWeekdays && schedule.weekdays.isEmpty { return }
 
         let calendar = Calendar.current
         let firstDay = calendar.startOfDay(for: startDate)
@@ -82,8 +75,8 @@ enum DoseGenerator {
 
     /// Rebuilds the upcoming doses of `schedule` after it was edited: every still pending dose
     /// of this schedule from today onwards is dropped and regenerated, while doses the user
-    /// already acted on (`.taken` / `.skipped`) are kept as history. Doses belonging to the
-    /// medication's other schedules are never touched.
+    /// already took are kept as history. Doses belonging to the medication's other schedules
+    /// are never touched.
     ///
     /// The caller is responsible for saving `context`.
     static func regenerateFutureDoses(for schedule: Schedule, context: ModelContext) {
@@ -127,13 +120,11 @@ enum DoseGenerator {
             return schedule.weekdays.contains(weekday)
 
         case .everyNDays:
-            guard schedule.intervalDays >= 1 else { return false }
-            guard let elapsedDays = calendar.dateComponents(
-                [.day],
-                from: scheduleStart,
-                to: day
-            ).day else { return false }
-            return elapsedDays % schedule.intervalDays == 0
+            // Counted from the first day of the schedule, so the start date is always active
+            // no matter how wide the gap is.
+            let interval = max(1, schedule.intervalDays)
+            let elapsed = calendar.dateComponents([.day], from: scheduleStart, to: day).day ?? 0
+            return elapsed % interval == 0
         }
     }
 

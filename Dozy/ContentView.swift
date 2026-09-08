@@ -9,17 +9,31 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    /// The calendar sits in the middle of the bar but is what the app opens on, so the
+    /// selection is held rather than left to the first tab.
+    @State private var selection: TabIdentifier = .calendar
+
     var body: some View {
-        TabView {
-            Tab("Bugün", systemImage: "checklist") {
+        TabView(selection: $selection) {
+            Tab("Bugün", systemImage: "sun.max.fill", value: TabIdentifier.today) {
                 TodayView()
             }
 
-            Tab("İlaçlarım", systemImage: "pills") {
+            Tab("Takvim", systemImage: "calendar", value: TabIdentifier.calendar) {
+                CalendarView()
+            }
+
+            Tab("İlaçlarım", systemImage: "pills.fill", value: TabIdentifier.medications) {
                 MedicationListView()
             }
         }
     }
+}
+
+private enum TabIdentifier {
+    case today
+    case calendar
+    case medications
 }
 
 #Preview {

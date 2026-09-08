@@ -23,19 +23,28 @@ enum MedicationActions {
         }
     }
 
-    /// A single tap toggles between done and not done; a skipped dose counts as not done.
+    /// A single tap toggles between done and not done.
     static func toggle(_ dose: Dose, context: ModelContext) {
         setStatus(dose.status == .taken ? .pending : .taken, for: dose, context: context)
     }
 
-    /// Removes a medication with the schedules and doses cascading from it, after pulling the
-    /// reminders those doses had registered.
-    static func delete(_ medication: Medication, context: ModelContext) {
-        for dose in medication.doses ?? [] {
+    /// Takes a medication out of circulation without erasing what it left behind: the record
+    /// is flagged rather than deleted, so every dose already on the calendar keeps the name,
+    /// colour and dosage it was recorded with.
+    ///
+    /// Only doses still ahead are dropped. Anything whose time has passed — taken or missed —
+    /// is history and stays exactly where it is.
+    static func archive(_ medication: Medication, context: ModelContext) {
+        medication.isArchived = true
+        medication.archivedAt = Date()
+
+        let now = Date()
+        for dose in medication.doses ?? []
+        where !dose.isDeleted && dose.status == .pending && dose.scheduledAt >= now {
             NotificationManager.cancelNotification(for: dose)
+            context.delete(dose)
         }
 
-        context.delete(medication)
         try? context.save()
 
         Task { await NotificationManager.syncScheduledNotifications(context: context) }

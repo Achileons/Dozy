@@ -20,7 +20,8 @@ final class Schedule {
     var repeatRule: RepeatRule = RepeatRule.daily
     /// Weekdays used when `repeatRule` is `.specificWeekdays`, 1 = Sunday ... 7 = Saturday.
     var weekdays: [Int] = []
-    /// Interval used when `repeatRule` is `.everyNDays`.
+    /// Gap between two active days when `repeatRule` is `.everyNDays`, counted from
+    /// `startDate`. A value of 1 is every day, which is what the other rules leave it at.
     var intervalDays: Int = 1
     var startDate: Date = Date()
     /// Open ended schedule when `nil`.

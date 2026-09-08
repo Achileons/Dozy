@@ -27,10 +27,14 @@ enum Layout {
     static let cardCorner: CGFloat = 20
     static let controlCorner: CGFloat = 14
     static let border: CGFloat = 1
+    /// A border that has to read as a choice rather than as an edge.
+    static let selectedBorder: CGFloat = 2
 
     static let statusIcon: CGFloat = 28
     static let medicationDot: CGFloat = 10
     static let colorSwatch: CGFloat = 44
+    static let actionButton: CGFloat = 52
+    static let dayCell: CGFloat = 56
 }
 
 // MARK: - Typography
@@ -67,8 +71,18 @@ enum Palette {
                                   dark: UIColor(white: 0.48, alpha: 1))
     static let taken = adaptive(light: UIColor(red: 0.13, green: 0.55, blue: 0.36, alpha: 1),
                                 dark: UIColor(red: 0.40, green: 0.82, blue: 0.60, alpha: 1))
-    static let skipped = adaptive(light: UIColor(red: 0.72, green: 0.45, blue: 0.12, alpha: 1),
-                                  dark: UIColor(red: 0.95, green: 0.72, blue: 0.38, alpha: 1))
+    /// A dose that came and went without being taken. Also the tint of anything destructive.
+    static let missed = adaptive(light: UIColor(red: 0.72, green: 0.25, blue: 0.20, alpha: 1),
+                                 dark: UIColor(red: 0.94, green: 0.55, blue: 0.50, alpha: 1))
+
+    /// Muted washes of the three tones above, used to fill a whole calendar day. They sit
+    /// behind the day number, so they stay far enough from the text to keep it readable.
+    static let takenFill = adaptive(light: UIColor(red: 0.85, green: 0.93, blue: 0.88, alpha: 1),
+                                    dark: UIColor(red: 0.13, green: 0.26, blue: 0.20, alpha: 1))
+    static let partialFill = adaptive(light: UIColor(red: 0.99, green: 0.92, blue: 0.82, alpha: 1),
+                                      dark: UIColor(red: 0.31, green: 0.24, blue: 0.12, alpha: 1))
+    static let missedFill = adaptive(light: UIColor(red: 0.98, green: 0.88, blue: 0.86, alpha: 1),
+                                     dark: UIColor(red: 0.32, green: 0.18, blue: 0.17, alpha: 1))
 
     /// Fill behind a neutral primary action, such as the empty state's add button.
     static let accentFill = adaptive(light: UIColor(white: 0.12, alpha: 1),
@@ -117,7 +131,6 @@ extension DoseStatus {
         switch self {
         case .pending: "circle"
         case .taken: "checkmark.circle.fill"
-        case .skipped: "xmark.circle"
         }
     }
 
@@ -125,7 +138,6 @@ extension DoseStatus {
         switch self {
         case .pending: Palette.pending
         case .taken: Palette.taken
-        case .skipped: Palette.skipped
         }
     }
 
@@ -134,7 +146,6 @@ extension DoseStatus {
         switch self {
         case .pending: "Bekliyor"
         case .taken: "Alındı"
-        case .skipped: "Atlandı"
         }
     }
 }

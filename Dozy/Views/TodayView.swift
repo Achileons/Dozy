@@ -33,10 +33,14 @@ struct TodayView: View {
 private struct DayDoseList: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var doses: [Dose]
+    /// Which of the two add paths is offered turns on whether anything has been added at
+    /// all, not on whether today happens to be empty.
+    @Query(filter: #Predicate<Medication> { !$0.isArchived }, sort: \Medication.name, order: .forward)
+    private var medications: [Medication]
 
     @State private var isAddingMedication = false
     @State private var medicationBeingEdited: Medication?
-    @State private var medicationPendingDeletion: Medication?
+    @State private var medicationPendingArchive: Medication?
 
     private let day: Date
 
@@ -56,8 +60,10 @@ private struct DayDoseList: View {
         ZStack {
             Palette.surface.ignoresSafeArea()
 
-            if doses.isEmpty {
-                EmptyState(message: "Bugün için doz yok") { isAddingMedication = true }
+            if medications.isEmpty {
+                EmptyState(message: "Henüz ilaç yok") { isAddingMedication = true }
+            } else if doses.isEmpty {
+                EmptyMessage(message: "Bugün için doz yok")
             } else {
                 list
             }
@@ -65,15 +71,19 @@ private struct DayDoseList: View {
         .navigationTitle(day.formatted(.dateTime.day().month(.wide).locale(.turkish)))
         .navigationSubtitle(summary)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    isAddingMedication = true
-                } label: {
-                    Image(systemName: "plus")
-                        .font(Typography.control)
-                        .frame(width: Layout.minTouchTarget, height: Layout.minTouchTarget)
+            // Hidden while the large button below is on screen, so there is only ever one
+            // way to add a medication from here.
+            if !medications.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        isAddingMedication = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(Typography.control)
+                            .frame(width: Layout.minTouchTarget, height: Layout.minTouchTarget)
+                    }
+                    .accessibilityLabel("İlaç ekle")
                 }
-                .accessibilityLabel("İlaç ekle")
             }
         }
         .sheet(isPresented: $isAddingMedication) {
@@ -82,189 +92,27 @@ private struct DayDoseList: View {
         .sheet(item: $medicationBeingEdited) { medication in
             MedicationFormView(medication: medication)
         }
-        .deleteMedicationConfirmation(medication: $medicationPendingDeletion) { medication in
-            MedicationActions.delete(medication, context: modelContext)
+        .archiveMedicationConfirmation(medication: $medicationPendingArchive) { medication in
+            MedicationActions.archive(medication, context: modelContext)
         }
     }
 
     private var list: some View {
         List {
             ForEach(doses) { dose in
-                DoseRow(dose: dose)
-                    .contentShape(RoundedRectangle(cornerRadius: Layout.cardCorner, style: .continuous))
-                    .onTapGesture {
-                        withAnimation(.snappy) {
-                            MedicationActions.toggle(dose, context: modelContext)
-                        }
-                    }
-                    .contextMenu { menu(for: dose) }
-                    .listRowInsets(EdgeInsets(
-                        top: Spacing.sm, leading: Spacing.lg,
-                        bottom: Spacing.sm, trailing: Spacing.lg
-                    ))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        Button {
-                            setStatus(.taken, for: dose)
-                        } label: {
-                            Label("Aldım", systemImage: DoseStatus.taken.iconName)
-                        }
-                        .tint(Palette.taken)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button {
-                            setStatus(.skipped, for: dose)
-                        } label: {
-                            Label("Atla", systemImage: DoseStatus.skipped.iconName)
-                        }
-                        .tint(Palette.skipped)
-                    }
+                DoseRow(
+                    dose: dose,
+                    onEditMedication: { medicationBeingEdited = $0 },
+                    onArchiveMedication: { medicationPendingArchive = $0 }
+                )
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
     }
 
-    @ViewBuilder
-    private func menu(for dose: Dose) -> some View {
-        // The action matching the current state is left out; it would do nothing.
-        if dose.status != .taken {
-            Button("Aldım", systemImage: DoseStatus.taken.iconName) {
-                setStatus(.taken, for: dose)
-            }
-        }
-        if dose.status != .skipped {
-            Button("Atla", systemImage: DoseStatus.skipped.iconName) {
-                setStatus(.skipped, for: dose)
-            }
-        }
-        if dose.status != .pending {
-            Button("Geri al", systemImage: "arrow.uturn.backward") {
-                setStatus(.pending, for: dose)
-            }
-        }
-
-        Divider()
-
-        if let medication = dose.medication {
-            Button("İlacı düzenle", systemImage: "pencil") {
-                medicationBeingEdited = medication
-            }
-            Button("İlacı sil", systemImage: "trash", role: .destructive) {
-                medicationPendingDeletion = medication
-            }
-        }
-    }
-
     private var summary: String {
         let takenCount = doses.count { $0.status == .taken }
         return "\(takenCount)/\(doses.count) alındı"
-    }
-
-    private func setStatus(_ status: DoseStatus, for dose: Dose) {
-        withAnimation(.snappy) {
-            MedicationActions.setStatus(status, for: dose, context: modelContext)
-        }
-    }
-}
-
-// MARK: - Dose row
-
-private struct DoseRow: View {
-    let dose: Dose
-
-    var body: some View {
-        HStack(spacing: Spacing.md) {
-            Image(systemName: dose.status.iconName)
-                .font(.system(size: Layout.statusIcon))
-                .foregroundStyle(dose.status.tint)
-                .contentTransition(.symbolEffect(.replace))
-
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                HStack(spacing: Spacing.sm) {
-                    Circle()
-                        .fill(Color(hex: dose.medication?.colorHex ?? ""))
-                        .frame(width: Layout.medicationDot, height: Layout.medicationDot)
-
-                    Text(dose.medication?.name ?? "İlaç")
-                        .font(Typography.itemTitle)
-                        .foregroundStyle(Palette.primaryText)
-                }
-
-                if let dosage = dose.medication?.dosage, !dosage.isEmpty {
-                    Text(dosage)
-                        .font(Typography.itemDetail)
-                        .foregroundStyle(Palette.secondaryText)
-                }
-            }
-
-            Spacer(minLength: Spacing.sm)
-
-            Text(dose.scheduledAt, format: .dateTime.hour().minute())
-                .font(Typography.time)
-                .foregroundStyle(Palette.primaryText)
-                .monospacedDigit()
-        }
-        .frame(minHeight: Layout.minTouchTarget)
-        // Only the content recedes once a dose is handled; the card surface itself stays
-        // opaque so the row does not turn muddy against the background.
-        .opacity(dose.status == .pending ? 1 : 0.55)
-        .dozyCard()
-        .accessibilityElement(children: .combine)
-        .accessibilityValue(dose.status.accessibilityTitle)
-    }
-}
-
-// MARK: - Empty state
-
-/// One line and one large button — nothing to read, one thing to do.
-struct EmptyState: View {
-    let message: String
-    let action: () -> Void
-
-    var body: some View {
-        VStack(spacing: Spacing.xl) {
-            Text(message)
-                .font(Typography.itemTitle)
-                .foregroundStyle(Palette.secondaryText)
-
-            Button(action: action) {
-                Label("İlaç ekle", systemImage: "plus")
-                    .font(Typography.control)
-                    .foregroundStyle(Palette.accentLabel)
-                    .frame(maxWidth: .infinity, minHeight: 52)
-                    .background(
-                        Palette.accentFill,
-                        in: RoundedRectangle(cornerRadius: Layout.controlCorner, style: .continuous)
-                    )
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(Spacing.xl)
-    }
-}
-
-// MARK: - Deletion confirmation
-
-extension View {
-    /// The confirmation shared by every screen that can delete a medication.
-    func deleteMedicationConfirmation(
-        medication: Binding<Medication?>,
-        onConfirm: @escaping (Medication) -> Void
-    ) -> some View {
-        confirmationDialog(
-            "İlacı sil",
-            isPresented: Binding(
-                get: { medication.wrappedValue != nil },
-                set: { if !$0 { medication.wrappedValue = nil } }
-            ),
-            presenting: medication.wrappedValue
-        ) { target in
-            Button("Sil", role: .destructive) { onConfirm(target) }
-            Button("Vazgeç", role: .cancel) {}
-        } message: { target in
-            Text("\(target.name) silinecek, geçmiş kayıtları da gidecek.")
-        }
     }
 }

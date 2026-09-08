@@ -43,8 +43,8 @@ enum NotificationManager {
 
         let doses = upcomingPendingDoses(context: context)
 
-        // Drop everything first so doses that were taken, skipped or rescheduled in the
-        // meantime cannot leave a stale reminder behind.
+        // Drop everything first so doses that were taken or rescheduled in the meantime
+        // cannot leave a stale reminder behind.
         center.removeAllPendingNotificationRequests()
 
         let calendar = Calendar.current

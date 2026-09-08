@@ -10,7 +10,6 @@ import SwiftData
 enum DoseStatus: Int, Codable, CaseIterable {
     case pending = 0
     case taken = 1
-    case skipped = 2
 }
 
 @Model

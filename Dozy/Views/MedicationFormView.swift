@@ -15,7 +15,8 @@ struct MedicationFormView: View {
     private let medication: Medication?
 
     @State private var name: String
-    @State private var dosage: String
+    @State private var dosageUnit: DosageUnit
+    @State private var dosageAmount: Double
     @State private var notes: String
     @State private var colorHex: String
     @State private var times: [TimeSlot]
@@ -26,6 +27,11 @@ struct MedicationFormView: View {
     @State private var hasEndDate: Bool
     @State private var endDate: Date
 
+    /// Set while the time picker is up. A time only joins the list once it is confirmed
+    /// there, so backing out of the sheet leaves the schedule untouched.
+    @State private var timeBeingAdded: TimeSlot?
+    @State private var medicationPendingArchive: Medication?
+
     init(medication: Medication? = nil) {
         self.medication = medication
 
@@ -34,13 +40,14 @@ struct MedicationFormView: View {
         let times = schedule?.times.sorted() ?? []
 
         _name = State(initialValue: medication?.name ?? "")
-        _dosage = State(initialValue: medication?.dosage ?? "")
+        _dosageUnit = State(initialValue: medication?.unit ?? .tablet)
+        _dosageAmount = State(initialValue: medication?.dosageAmount ?? 1)
         _notes = State(initialValue: medication?.notes ?? "")
         _colorHex = State(initialValue: medication?.colorHex ?? Self.colorOptions[0])
-        _times = State(initialValue: (times.isEmpty ? [Self.defaultTime] : times).map(TimeSlot.init))
+        _times = State(initialValue: times.map(TimeSlot.init))
         _repeatRule = State(initialValue: schedule?.repeatRule ?? .daily)
         _weekdays = State(initialValue: Set(schedule?.weekdays ?? []))
-        _intervalDays = State(initialValue: max(1, schedule?.intervalDays ?? 1))
+        _intervalDays = State(initialValue: schedule?.intervalDays ?? Self.defaultInterval)
         _startDate = State(initialValue: schedule?.startDate ?? Date())
         _hasEndDate = State(initialValue: schedule?.endDate != nil)
         _endDate = State(initialValue: schedule?.endDate ?? Self.defaultEndDate)
@@ -54,10 +61,15 @@ struct MedicationFormView: View {
                 ScrollView {
                     VStack(spacing: Spacing.lg) {
                         detailsCard
+                        dosageCard
                         colorCard
                         timesCard
                         repeatCard
                         periodCard
+
+                        if medication != nil {
+                            archiveButton
+                        }
                     }
                     .padding(Spacing.lg)
                 }
@@ -77,6 +89,15 @@ struct MedicationFormView: View {
             }
         }
         .environment(\.locale, .turkish)
+        .sheet(item: $timeBeingAdded) { slot in
+            TimePickerSheet(initialTime: slot.date) { time in
+                withAnimation(.snappy) { times.append(TimeSlot(date: time)) }
+            }
+        }
+        .archiveMedicationConfirmation(medication: $medicationPendingArchive) { medication in
+            MedicationActions.archive(medication, context: modelContext)
+            dismiss()
+        }
     }
 
     // MARK: - Cards
@@ -86,9 +107,44 @@ struct MedicationFormView: View {
             VStack(spacing: Spacing.xs) {
                 FormField(placeholder: "İlaç adı", text: $name)
                 Divider()
-                FormField(placeholder: "Doz", text: $dosage)
-                Divider()
                 FormField(placeholder: "Not", text: $notes)
+            }
+        }
+    }
+
+    /// Dose is picked rather than typed: a unit, then an amount. The two are stored side by
+    /// side and only joined into `dosage` when saving.
+    private var dosageCard: some View {
+        FormCard(title: "Doz") {
+            VStack(alignment: .leading, spacing: Spacing.lg) {
+                // The six units do not fit across a phone, so the row scrolls rather than
+                // wrapping the buttons onto a ragged second line.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Spacing.sm) {
+                        ForEach(DosageUnit.allCases) { unit in
+                            SelectableChip(title: unit.title, isOn: unit == dosageUnit) {
+                                withAnimation(.snappy) { dosageUnit = unit }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, Spacing.xs)
+                }
+                .scrollClipDisabled()
+                .padding(.horizontal, -Spacing.xs)
+
+                Divider()
+
+                Stepper(
+                    value: $dosageAmount,
+                    in: Self.amountRange,
+                    step: Self.amountStep
+                ) {
+                    Text(Medication.dosageText(amount: dosageAmount, unit: dosageUnit))
+                        .font(Typography.itemTitle)
+                        .foregroundStyle(Palette.primaryText)
+                }
+                .frame(minHeight: Layout.minTouchTarget)
+                .accessibilityLabel("Miktar")
             }
         }
     }
@@ -131,30 +187,30 @@ struct MedicationFormView: View {
 
                         Spacer()
 
-                        if times.count > 1 {
-                            Button {
-                                withAnimation(.snappy) { times.removeAll { $0.id == slot.id } }
-                            } label: {
-                                Image(systemName: "minus.circle")
-                                    .font(.title3)
-                                    .foregroundStyle(Palette.skipped)
-                                    .frame(
-                                        width: Layout.minTouchTarget,
-                                        height: Layout.minTouchTarget,
-                                        alignment: .trailing
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Saati sil")
+                        Button {
+                            withAnimation(.snappy) { times.removeAll { $0.id == slot.id } }
+                        } label: {
+                            Image(systemName: "minus.circle")
+                                .font(.title3)
+                                .foregroundStyle(Palette.missed)
+                                .frame(
+                                    width: Layout.minTouchTarget,
+                                    height: Layout.minTouchTarget,
+                                    alignment: .trailing
+                                )
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Saati sil")
                     }
                     .frame(minHeight: Layout.minTouchTarget)
                 }
 
-                Divider()
+                if !times.isEmpty {
+                    Divider()
+                }
 
                 Button {
-                    withAnimation(.snappy) { times.append(TimeSlot(date: nextSuggestedTime())) }
+                    timeBeingAdded = TimeSlot(date: nextSuggestedTime())
                 } label: {
                     Label("Saat ekle", systemImage: "plus")
                         .font(Typography.control)
@@ -172,15 +228,11 @@ struct MedicationFormView: View {
                 Picker("Tekrar kuralı", selection: $repeatRule.animation(.snappy)) {
                     Text("Her gün").tag(RepeatRule.daily)
                     Text("Günler").tag(RepeatRule.specificWeekdays)
-                    Text("Aralık").tag(RepeatRule.everyNDays)
+                    Text("Aralıklı").tag(RepeatRule.everyNDays)
                 }
                 .pickerStyle(.segmented)
 
-                switch repeatRule {
-                case .daily:
-                    EmptyView()
-
-                case .specificWeekdays:
+                if repeatRule == .specificWeekdays {
                     HStack(spacing: Spacing.sm) {
                         ForEach(Self.weekdayOrder, id: \.self) { weekday in
                             WeekdayToggle(
@@ -197,14 +249,16 @@ struct MedicationFormView: View {
                             }
                         }
                     }
+                }
 
-                case .everyNDays:
-                    Stepper(value: $intervalDays, in: 1...30) {
+                if repeatRule == .everyNDays {
+                    Stepper(value: $intervalDays, in: Self.intervalRange) {
                         Text("\(intervalDays) günde bir")
                             .font(Typography.itemDetail)
                             .foregroundStyle(Palette.primaryText)
                     }
                     .frame(minHeight: Layout.minTouchTarget)
+                    .accessibilityLabel("Gün aralığı")
                 }
             }
         }
@@ -232,6 +286,28 @@ struct MedicationFormView: View {
         }
     }
 
+    /// Removing lives at the bottom of the form rather than in the bar, so it is reached
+    /// deliberately and never next to "Kaydet".
+    private var archiveButton: some View {
+        Button {
+            medicationPendingArchive = medication
+        } label: {
+            Label("Bu ilacı kaldır", systemImage: "archivebox")
+                .font(Typography.control)
+                .foregroundStyle(Palette.missed)
+                .frame(maxWidth: .infinity, minHeight: Layout.actionButton)
+                .background(
+                    Palette.card,
+                    in: RoundedRectangle(cornerRadius: Layout.cardCorner, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: Layout.cardCorner, style: .continuous)
+                        .strokeBorder(Palette.missed.opacity(0.4), lineWidth: Layout.border)
+                }
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - Saving
 
     private var trimmedName: String {
@@ -253,7 +329,9 @@ struct MedicationFormView: View {
         }
 
         medication.name = trimmedName
-        medication.dosage = dosage.trimmingCharacters(in: .whitespacesAndNewlines)
+        medication.dosage = Medication.dosageText(amount: dosageAmount, unit: dosageUnit)
+        medication.dosageUnit = dosageUnit.rawValue
+        medication.dosageAmount = dosageAmount
         medication.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         medication.colorHex = colorHex
 
@@ -267,7 +345,7 @@ struct MedicationFormView: View {
         schedule.times = normalizedTimes()
         schedule.repeatRule = repeatRule
         schedule.weekdays = repeatRule == .specificWeekdays ? weekdays.sorted() : []
-        schedule.intervalDays = repeatRule == .everyNDays ? max(1, intervalDays) : 1
+        schedule.intervalDays = repeatRule == .everyNDays ? intervalDays : 1
         schedule.startDate = startDate
         schedule.endDate = hasEndDate ? endDate : nil
 
@@ -312,6 +390,14 @@ struct MedicationFormView: View {
     /// Monday first for display, mapped onto `Calendar`'s 1 = Sunday numbering.
     private static let weekdayOrder = [2, 3, 4, 5, 6, 7, 1]
 
+    /// Half units are the smallest split a tablet is scored for.
+    private static let amountRange = 0.5...100.0
+    private static let amountStep = 0.5
+
+    /// Wide enough for "every other day" through to a monthly dose.
+    private static let intervalRange = 2...30
+    private static let defaultInterval = 2
+
     private static var defaultTime: Date {
         Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date()
     }
@@ -331,6 +417,49 @@ private struct TimeSlot: Identifiable {
 
     init(date: Date) {
         self.date = date
+    }
+}
+
+/// Picks one time of day and hands it back only if the user confirms, so "Saat ekle" never
+/// puts a row in the list on its own.
+private struct TimePickerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var time: Date
+    private let onConfirm: (Date) -> Void
+
+    init(initialTime: Date, onConfirm: @escaping (Date) -> Void) {
+        _time = State(initialValue: initialTime)
+        self.onConfirm = onConfirm
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Palette.surface.ignoresSafeArea()
+
+                DatePicker("Saat", selection: $time, displayedComponents: .hourAndMinute)
+                    .datePickerStyle(.wheel)
+                    .labelsHidden()
+                    .padding(Spacing.lg)
+            }
+            .navigationTitle("Saat ekle")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("İptal") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Ekle") {
+                        onConfirm(time)
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .environment(\.locale, .turkish)
     }
 }
 
@@ -363,6 +492,30 @@ private struct FormField: View {
             .foregroundStyle(Palette.primaryText)
             .textInputAutocapitalization(.sentences)
             .frame(minHeight: Layout.minTouchTarget)
+    }
+}
+
+/// One option in a single-choice row. Same treatment as `WeekdayToggle`, but it hugs its
+/// label instead of sharing the width evenly.
+private struct SelectableChip: View {
+    let title: String
+    let isOn: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(Typography.control)
+                .foregroundStyle(isOn ? Palette.accentLabel : Palette.secondaryText)
+                .padding(.horizontal, Spacing.lg)
+                .frame(minHeight: Layout.minTouchTarget)
+                .background(
+                    isOn ? Palette.accentFill : Palette.surface,
+                    in: RoundedRectangle(cornerRadius: Layout.controlCorner, style: .continuous)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isOn ? [.isSelected] : [])
     }
 }
 
