@@ -116,6 +116,16 @@ private struct MedicationRow: View {
                 Text(ScheduleSummary.text(for: medication.schedules?.first))
                     .font(Typography.meta)
                     .foregroundStyle(Palette.secondaryText)
+
+                // Only shown while the medication counts its package, and tinted once that
+                // package is down to the threshold the user set.
+                if let stock = StockCalculator.summary(for: medication) {
+                    Text(stock)
+                        .font(Typography.meta)
+                        .foregroundStyle(
+                            medication.isLowOnStock ? Palette.missed : Palette.secondaryText
+                        )
+                }
             }
 
             Spacer(minLength: Spacing.sm)

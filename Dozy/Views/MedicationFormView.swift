@@ -23,6 +23,10 @@ struct MedicationFormView: View {
     @State private var repeatRule: RepeatRule
     @State private var weekdays: Set<Int>
     @State private var intervalDays: Int
+    @State private var stockEnabled: Bool
+    @State private var currentStock: Int
+    @State private var packageSize: Int
+    @State private var lowStockThreshold: Int
     @State private var startDate: Date
     @State private var hasEndDate: Bool
     @State private var endDate: Date
@@ -48,6 +52,16 @@ struct MedicationFormView: View {
         _repeatRule = State(initialValue: schedule?.repeatRule ?? .daily)
         _weekdays = State(initialValue: Set(schedule?.weekdays ?? []))
         _intervalDays = State(initialValue: schedule?.intervalDays ?? Self.defaultInterval)
+        _stockEnabled = State(initialValue: medication?.stockEnabled ?? false)
+        _currentStock = State(initialValue: medication?.currentStock ?? 0)
+        _packageSize = State(initialValue: medication?.packageSize ?? 0)
+
+        // A medication from before stock tracking carries a threshold of zero, which would
+        // only warn once the package was already empty.
+        let storedThreshold = medication?.lowStockThreshold ?? 0
+        _lowStockThreshold = State(
+            initialValue: storedThreshold > 0 ? storedThreshold : Self.defaultLowStockThreshold
+        )
         _startDate = State(initialValue: schedule?.startDate ?? Date())
         _hasEndDate = State(initialValue: schedule?.endDate != nil)
         _endDate = State(initialValue: schedule?.endDate ?? Self.defaultEndDate)
@@ -66,6 +80,7 @@ struct MedicationFormView: View {
                         timesCard
                         repeatCard
                         periodCard
+                        stockCard
 
                         if medication != nil {
                             archiveButton
@@ -308,6 +323,42 @@ struct MedicationFormView: View {
         .buttonStyle(.plain)
     }
 
+    private var stockCard: some View {
+        FormCard(title: "Stok") {
+            VStack(spacing: Spacing.xs) {
+                Toggle("Stok takibi", isOn: $stockEnabled.animation(.snappy))
+                    .font(Typography.itemDetail)
+                    .frame(minHeight: Layout.minTouchTarget)
+
+                if stockEnabled {
+                    Divider()
+
+                    CountStepper(
+                        title: "Eldeki miktar",
+                        value: $currentStock,
+                        range: Self.stockRange
+                    )
+
+                    Divider()
+
+                    CountStepper(
+                        title: "Kutu büyüklüğü",
+                        value: $packageSize,
+                        range: Self.stockRange
+                    )
+
+                    Divider()
+
+                    CountStepper(
+                        title: "Uyarı eşiği",
+                        value: $lowStockThreshold,
+                        range: Self.thresholdRange
+                    )
+                }
+            }
+        }
+    }
+
     // MARK: - Saving
 
     private var trimmedName: String {
@@ -334,6 +385,12 @@ struct MedicationFormView: View {
         medication.dosageAmount = dosageAmount
         medication.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         medication.colorHex = colorHex
+        // The counts are kept even while tracking is off, so switching it back on does not
+        // start from an empty package. Everything downstream gates on `stockEnabled`.
+        medication.stockEnabled = stockEnabled
+        medication.currentStock = currentStock
+        medication.packageSize = packageSize
+        medication.lowStockThreshold = lowStockThreshold
 
         let schedule = medication.schedules?.first ?? {
             let schedule = Schedule()
@@ -354,7 +411,11 @@ struct MedicationFormView: View {
 
         // Reminders are derived from the doses, so they are refreshed once those are stored.
         let context = modelContext
-        Task { await NotificationManager.syncScheduledNotifications(context: context) }
+        Task {
+            await NotificationManager.syncScheduledNotifications(context: context)
+            // The threshold or the amount left may have just moved past each other.
+            await NotificationManager.updateLowStockNotification(for: medication, context: context)
+        }
 
         dismiss()
     }
@@ -393,6 +454,10 @@ struct MedicationFormView: View {
     /// Half units are the smallest split a tablet is scored for.
     private static let amountRange = 0.5...100.0
     private static let amountStep = 0.5
+
+    private static let stockRange = 0...999
+    private static let thresholdRange = 0...99
+    private static let defaultLowStockThreshold = 5
 
     /// Wide enough for "every other day" through to a monthly dose.
     private static let intervalRange = 2...30
@@ -492,6 +557,32 @@ private struct FormField: View {
             .foregroundStyle(Palette.primaryText)
             .textInputAutocapitalization(.sentences)
             .frame(minHeight: Layout.minTouchTarget)
+    }
+}
+
+/// A labelled whole-number stepper, sized like the other rows in a form card.
+private struct CountStepper: View {
+    let title: String
+    @Binding var value: Int
+    let range: ClosedRange<Int>
+
+    var body: some View {
+        Stepper(value: $value, in: range) {
+            HStack {
+                Text(title)
+                    .font(Typography.itemDetail)
+                    .foregroundStyle(Palette.secondaryText)
+
+                Spacer(minLength: Spacing.sm)
+
+                Text("\(value)")
+                    .font(Typography.itemTitle)
+                    .foregroundStyle(Palette.primaryText)
+                    .monospacedDigit()
+            }
+        }
+        .frame(minHeight: Layout.minTouchTarget)
+        .accessibilityLabel(title)
     }
 }
 

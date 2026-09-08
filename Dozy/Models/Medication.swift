@@ -62,6 +62,9 @@ final class Medication {
     var isArchived: Bool = false
     var archivedAt: Date?
 
+    /// Whether this medication counts what is left in the package. Off unless the user
+    /// turns it on, so the three fields below stay at zero and out of the way.
+    var stockEnabled: Bool = false
     /// Number of units currently left in the package.
     var currentStock: Int = 0
     /// Number of units a full package contains.
@@ -70,6 +73,9 @@ final class Medication {
     var lowStockThreshold: Int = 0
     /// Barcode identifier, filled in when the package was scanned.
     var gtin: String?
+    /// Identifier of the pending low stock warning, so it can be withdrawn once the package
+    /// is refilled. Empty when no warning is scheduled.
+    var lowStockNotificationID: String = ""
 
     @Relationship(deleteRule: .cascade, inverse: \Schedule.medication)
     var schedules: [Schedule]? = []
@@ -87,10 +93,12 @@ final class Medication {
         createdAt: Date = Date(),
         isArchived: Bool = false,
         archivedAt: Date? = nil,
+        stockEnabled: Bool = false,
         currentStock: Int = 0,
         packageSize: Int = 0,
         lowStockThreshold: Int = 0,
         gtin: String? = nil,
+        lowStockNotificationID: String = "",
         schedules: [Schedule]? = [],
         doses: [Dose]? = []
     ) {
@@ -103,10 +111,12 @@ final class Medication {
         self.createdAt = createdAt
         self.isArchived = isArchived
         self.archivedAt = archivedAt
+        self.stockEnabled = stockEnabled
         self.currentStock = currentStock
         self.packageSize = packageSize
         self.lowStockThreshold = lowStockThreshold
         self.gtin = gtin
+        self.lowStockNotificationID = lowStockNotificationID
         self.schedules = schedules
         self.doses = doses
     }
@@ -117,6 +127,16 @@ extension Medication {
     /// by a version that knew a unit this one does not.
     var unit: DosageUnit {
         DosageUnit(rawValue: dosageUnit) ?? .tablet
+    }
+
+    /// What is left in the package, worded with the medication's own unit: "12 tablet".
+    var stockText: String {
+        Self.dosageText(amount: Double(currentStock), unit: unit)
+    }
+
+    /// Whether the package has run down far enough to warn about.
+    var isLowOnStock: Bool {
+        stockEnabled && currentStock <= lowStockThreshold
     }
 
     /// Joins the amount and the unit into the line stored in `dosage`.
