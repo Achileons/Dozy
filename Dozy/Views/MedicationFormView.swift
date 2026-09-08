@@ -36,6 +36,13 @@ struct MedicationFormView: View {
     @State private var timeBeingAdded: TimeSlot?
     @State private var medicationPendingArchive: Medication?
 
+    @State private var isScanning = false
+    /// The code the box was last scanned with; kept across edits so a name the user tidies
+    /// up by hand stays tied to the product it came from.
+    @State private var gtin: String?
+    /// Why the last scan filled nothing in. Cleared as soon as the name is typed into.
+    @State private var scanNotice: String?
+
     init(medication: Medication? = nil) {
         self.medication = medication
 
@@ -44,6 +51,7 @@ struct MedicationFormView: View {
         let times = schedule?.times.sorted() ?? []
 
         _name = State(initialValue: medication?.name ?? "")
+        _gtin = State(initialValue: medication?.gtin)
         _dosageUnit = State(initialValue: medication?.unit ?? .tablet)
         _dosageAmount = State(initialValue: medication?.dosageAmount ?? 1)
         _notes = State(initialValue: medication?.notes ?? "")
@@ -104,6 +112,9 @@ struct MedicationFormView: View {
             }
         }
         .environment(\.locale, .turkish)
+        .sheet(isPresented: $isScanning) {
+            ScannerView(onScan: handleScan)
+        }
         .sheet(item: $timeBeingAdded) { slot in
             TimePickerSheet(initialTime: slot.date) { time in
                 withAnimation(.snappy) { times.append(TimeSlot(date: time)) }
@@ -120,10 +131,35 @@ struct MedicationFormView: View {
     private var detailsCard: some View {
         FormCard {
             VStack(spacing: Spacing.xs) {
-                FormField(placeholder: "İlaç adı", text: $name)
+                HStack(spacing: Spacing.sm) {
+                    FormField(placeholder: "İlaç adı", text: $name)
+
+                    Button {
+                        isScanning = true
+                    } label: {
+                        Image(systemName: "qrcode.viewfinder")
+                            .font(.title3)
+                            .foregroundStyle(Palette.primaryText)
+                            .frame(width: Layout.minTouchTarget, height: Layout.minTouchTarget)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Karekodu veya barkodu okut")
+                }
+
+                if let scanNotice {
+                    Text(scanNotice)
+                        .font(Typography.meta)
+                        .foregroundStyle(Palette.missed)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .transition(.opacity)
+                }
+
                 Divider()
                 FormField(placeholder: "Not", text: $notes)
             }
+        }
+        .onChange(of: name) { _, _ in
+            withAnimation(.snappy) { scanNotice = nil }
         }
     }
 
@@ -359,6 +395,74 @@ struct MedicationFormView: View {
         }
     }
 
+    // MARK: - Scanning
+
+    /// Turns a scanned code into form values. Nothing the user typed is touched unless the
+    /// product is actually found, and even then every field stays editable.
+    private func handleScan(_ result: ScanResult?) {
+        guard let result else {
+            withAnimation(.snappy) { scanNotice = "Kod okunamadı, adı elle girebilirsin" }
+            return
+        }
+
+        guard let productName = MedicationDatabase.shared.lookup(barcode: result.barcode) else {
+            withAnimation(.snappy) {
+                scanNotice = "Bu ilaç veritabanında bulunamadı, adı elle girebilirsin"
+            }
+            return
+        }
+
+        withAnimation(.snappy) {
+            scanNotice = nil
+            name = productName
+            gtin = result.barcode
+
+            // The registered name usually ends in what the box holds, which is exactly
+            // the package size. Offered, not imposed: the card opens so it can be seen.
+            if let contents = Self.packageContents(in: productName) {
+                stockEnabled = true
+                packageSize = contents.count
+                if currentStock == 0 {
+                    currentStock = contents.count
+                }
+                if let unit = contents.unit {
+                    dosageUnit = unit
+                }
+            }
+        }
+    }
+
+    /// The count and unit a product name ends with — "20 TABLET", "100 ML" — or `nil` when
+    /// it names none. The last match wins, since the strength comes first and the pack
+    /// contents last; a number right after a slash is a strength ("100 MG/5 ML") and is
+    /// skipped.
+    static func packageContents(in productName: String) -> (count: Int, unit: DosageUnit?)? {
+        let name = productName.uppercased(with: .turkish)
+        let pattern = /(\d+)\s*(TABLET|KAPSÜL|KAPSUL|DRAJE|ŞASE|SAŞE|SASE|AMPUL|FLAKON|ADET|PASTİL|SUPOZİTUVAR|DAMLA|ML)\b/
+
+        for match in name.matches(of: pattern).reversed() {
+            // Only look behind the match when there is something there to look at.
+            if match.range.lowerBound > name.startIndex,
+               name[name.index(before: match.range.lowerBound)] == "/" {
+                continue
+            }
+            guard let count = Int(match.output.1), count > 0 else { continue }
+
+            let unit: DosageUnit? = switch match.output.2 {
+            case "TABLET": .tablet
+            case "KAPSÜL", "KAPSUL": .capsule
+            case "ŞASE", "SAŞE", "SASE": .sachet
+            case "AMPUL", "FLAKON": .injection
+            case "DAMLA": .drop
+            case "ML": .syrup
+            default: nil
+            }
+            return (count, unit)
+        }
+
+        return nil
+    }
+
     // MARK: - Saving
 
     private var trimmedName: String {
@@ -385,6 +489,7 @@ struct MedicationFormView: View {
         medication.dosageAmount = dosageAmount
         medication.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         medication.colorHex = colorHex
+        medication.gtin = gtin
         // The counts are kept even while tracking is off, so switching it back on does not
         // start from an empty package. Everything downstream gates on `stockEnabled`.
         medication.stockEnabled = stockEnabled
