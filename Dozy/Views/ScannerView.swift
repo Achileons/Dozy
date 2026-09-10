@@ -92,7 +92,7 @@ struct ScannerView: View {
     /// Sits over the camera so the user knows either code on the box will do.
     private var guidance: some View {
         Text("Kutudaki karekodu veya barkodu okut")
-            .font(Typography.control)
+            .textStyle(.callout)
             .foregroundStyle(Palette.accentLabel)
             .padding(.horizontal, Spacing.lg)
             .padding(.vertical, Spacing.md)
@@ -104,20 +104,7 @@ struct ScannerView: View {
     }
 
     private func notice(icon: String, title: String, detail: String) -> some View {
-        VStack(spacing: Spacing.md) {
-            EmptyIcon(systemName: icon)
-
-            Text(title)
-                .font(Typography.emptyTitle)
-                .foregroundStyle(Palette.primaryText)
-                .multilineTextAlignment(.center)
-
-            Text(detail)
-                .font(Typography.itemDetail)
-                .foregroundStyle(Palette.secondaryText)
-                .multilineTextAlignment(.center)
-        }
-        .padding(Spacing.xl)
+        EmptyPlaceholder(icon: icon, title: title, detail: detail)
     }
 }
 

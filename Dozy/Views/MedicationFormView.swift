@@ -138,7 +138,7 @@ struct MedicationFormView: View {
                         isScanning = true
                     } label: {
                         Image(systemName: "qrcode.viewfinder")
-                            .font(Typography.inlineIcon)
+                            .font(.dozyIcon(size: Layout.inlineIcon))
                             .foregroundStyle(Palette.accent)
                             .frame(width: Layout.minTouchTarget, height: Layout.minTouchTarget)
                     }
@@ -148,7 +148,7 @@ struct MedicationFormView: View {
 
                 if let scanNotice {
                     Text(scanNotice)
-                        .font(Typography.meta)
+                        .textStyle(.caption)
                         .foregroundStyle(Palette.missed)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .transition(.opacity)
@@ -191,7 +191,7 @@ struct MedicationFormView: View {
                     step: Self.amountStep
                 ) {
                     Text(Medication.dosageText(amount: dosageAmount, unit: dosageUnit))
-                        .font(Typography.itemTitle)
+                        .textStyle(.headline)
                         .foregroundStyle(Palette.primaryText)
                 }
                 .frame(minHeight: Layout.minTouchTarget)
@@ -215,7 +215,7 @@ struct MedicationFormView: View {
                             .frame(width: Layout.colorSwatch, height: Layout.colorSwatch)
                             .overlay {
                                 Image(systemName: "checkmark")
-                                    .font(Typography.control)
+                                    .font(.dozyIcon(.callout, weight: .semibold))
                                     .foregroundStyle(.white)
                                     .opacity(hex == colorHex ? 1 : 0)
                             }
@@ -242,7 +242,7 @@ struct MedicationFormView: View {
                             withAnimation(Motion.spring) { times.removeAll { $0.id == slot.id } }
                         } label: {
                             Image(systemName: "minus.circle")
-                                .font(Typography.inlineIcon)
+                                .font(.dozyIcon(size: Layout.inlineIcon))
                                 .foregroundStyle(Palette.missed)
                                 .frame(
                                     width: Layout.minTouchTarget,
@@ -264,7 +264,7 @@ struct MedicationFormView: View {
                     timeBeingAdded = TimeSlot(date: nextSuggestedTime())
                 } label: {
                     Label("Saat ekle", systemImage: "plus")
-                        .font(Typography.control)
+                        .textStyle(.callout)
                         .foregroundStyle(Palette.primaryText)
                         .frame(maxWidth: .infinity, minHeight: Layout.minTouchTarget, alignment: .leading)
                 }
@@ -305,7 +305,7 @@ struct MedicationFormView: View {
                 if repeatRule == .everyNDays {
                     Stepper(value: $intervalDays, in: Self.intervalRange) {
                         Text("\(intervalDays) günde bir")
-                            .font(Typography.itemDetail)
+                            .textStyle(.body)
                             .foregroundStyle(Palette.primaryText)
                     }
                     .frame(minHeight: Layout.minTouchTarget)
@@ -319,13 +319,13 @@ struct MedicationFormView: View {
         FormCard(title: "Süre") {
             VStack(spacing: Spacing.xs) {
                 DatePicker("Başlangıç", selection: $startDate, displayedComponents: .date)
-                    .font(Typography.itemDetail)
+                    .textStyle(.body)
                     .frame(minHeight: Layout.minTouchTarget)
 
                 Divider()
 
                 Toggle("Bitiş", isOn: $hasEndDate.animation(Motion.gentle))
-                    .font(Typography.itemDetail)
+                    .textStyle(.body)
                     .frame(minHeight: Layout.minTouchTarget)
 
                 if hasEndDate {
@@ -344,7 +344,7 @@ struct MedicationFormView: View {
             medicationPendingArchive = medication
         } label: {
             Label("Bu ilacı kaldır", systemImage: "archivebox")
-                .font(Typography.control)
+                .textStyle(.callout)
                 .foregroundStyle(Palette.missed)
                 .frame(maxWidth: .infinity, minHeight: Layout.actionButton)
                 .background(
@@ -363,7 +363,7 @@ struct MedicationFormView: View {
         FormCard(title: "Stok") {
             VStack(spacing: Spacing.xs) {
                 Toggle("Stok takibi", isOn: $stockEnabled.animation(Motion.gentle))
-                    .font(Typography.itemDetail)
+                    .textStyle(.body)
                     .frame(minHeight: Layout.minTouchTarget)
 
                 if stockEnabled {
@@ -642,7 +642,7 @@ private struct FormCard<Content: View>: View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             if let title {
                 Text(title)
-                    .font(Typography.sectionTitle)
+                    .textStyle(.callout)
                     .foregroundStyle(Palette.secondaryText)
             }
 
@@ -658,7 +658,7 @@ private struct FormField: View {
 
     var body: some View {
         TextField(placeholder, text: $text)
-            .font(Typography.itemTitle)
+            .font(.dozy(.headline))
             .foregroundStyle(Palette.primaryText)
             .textInputAutocapitalization(.sentences)
             .frame(minHeight: Layout.minTouchTarget)
@@ -675,15 +675,14 @@ private struct CountStepper: View {
         Stepper(value: $value, in: range) {
             HStack {
                 Text(title)
-                    .font(Typography.itemDetail)
+                    .textStyle(.body)
                     .foregroundStyle(Palette.secondaryText)
 
                 Spacer(minLength: Spacing.sm)
 
                 Text("\(value)")
-                    .font(Typography.itemTitle)
+                    .textStyle(.numeric)
                     .foregroundStyle(Palette.primaryText)
-                    .monospacedDigit()
             }
         }
         .frame(minHeight: Layout.minTouchTarget)
@@ -701,7 +700,7 @@ private struct SelectableChip: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(Typography.control)
+                .textStyle(.callout)
                 .foregroundStyle(isOn ? Palette.accentLabel : Palette.secondaryText)
                 .padding(.horizontal, Spacing.lg)
                 .frame(minHeight: Layout.minTouchTarget)
@@ -723,7 +722,7 @@ private struct WeekdayToggle: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(Typography.control)
+                .textStyle(.callout)
                 .foregroundStyle(isOn ? Palette.accentLabel : Palette.secondaryText)
                 .frame(maxWidth: .infinity, minHeight: Layout.minTouchTarget)
                 .background(

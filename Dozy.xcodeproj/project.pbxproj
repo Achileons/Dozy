@@ -10,9 +10,22 @@
 		DADEF1DE304EDA47004FA9F8 /* Dozy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Dozy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		DAFAFA01304EDA47004FA9F8 /* Exceptions for "Dozy" folder in "Dozy" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = DADEF1DD304EDA47004FA9F8 /* Dozy */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		DADEF1E0304EDA47004FA9F8 /* Dozy */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				DAFAFA01304EDA47004FA9F8 /* Exceptions for "Dozy" folder in "Dozy" target */,
+			);
 			path = Dozy;
 			sourceTree = "<group>";
 		};
@@ -254,6 +267,7 @@
 				DEVELOPMENT_TEAM = JRHTBH72J7;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Dozy/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Kutunun üzerindeki karekodu okuyup ilacı tanımak için kameraya ihtiyaç var.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -287,6 +301,7 @@
 				DEVELOPMENT_TEAM = JRHTBH72J7;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Dozy/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Kutunun üzerindeki karekodu okuyup ilacı tanımak için kameraya ihtiyaç var.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

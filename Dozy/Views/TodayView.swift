@@ -61,7 +61,11 @@ private struct DayDoseList: View {
             Palette.surface.ignoresSafeArea()
 
             if medications.isEmpty {
-                EmptyState(icon: "pills.fill", message: "Henüz ilaç yok") {
+                EmptyState(
+                    icon: "pills.fill",
+                    title: "Henüz ilaç yok",
+                    detail: "İlk ilacını ekle, dozlarını buradan takip edelim."
+                ) {
                     isAddingMedication = true
                 }
             } else {
@@ -80,7 +84,7 @@ private struct DayDoseList: View {
                         isAddingMedication = true
                     } label: {
                         Image(systemName: "plus")
-                            .font(Typography.control)
+                            .font(.dozyIcon(.callout, weight: .semibold))
                             .foregroundStyle(Palette.accent)
                             .frame(width: Layout.minTouchTarget, height: Layout.minTouchTarget)
                     }
@@ -112,17 +116,29 @@ private struct DayDoseList: View {
                 .listRowSeparator(.hidden)
 
             if doses.isEmpty {
-                EmptyMessage(icon: "cup.and.saucer.fill", message: "Bugün için doz yok")
-                    .frame(maxWidth: .infinity)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
+                EmptyMessage(
+                    icon: "cup.and.saucer.fill",
+                    title: "Bugün için doz yok",
+                    detail: "Bugüne planlanmış bir doz bulunmuyor."
+                )
+                .frame(maxWidth: .infinity)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             } else {
-                ForEach(doses) { dose in
-                    DoseRow(
-                        dose: dose,
-                        onEditMedication: { medicationBeingEdited = $0 },
-                        onArchiveMedication: { medicationPendingArchive = $0 }
-                    )
+                listTitle
+
+                ForEach(groups) { group in
+                    Section {
+                        ForEach(group.doses) { dose in
+                            DoseRow(
+                                dose: dose,
+                                onEditMedication: { medicationBeingEdited = $0 },
+                                onArchiveMedication: { medicationPendingArchive = $0 }
+                            )
+                        }
+                    } header: {
+                        partHeader(group.part)
+                    }
                 }
             }
         }
@@ -130,43 +146,96 @@ private struct DayDoseList: View {
         .scrollContentBackground(.hidden)
     }
 
+    private var listTitle: some View {
+        Text("Bugünün dozları")
+            .textStyle(.callout)
+            .foregroundStyle(Palette.primaryText)
+            .listRowInsets(EdgeInsets(
+                top: Spacing.xs, leading: Spacing.lg,
+                bottom: 0, trailing: Spacing.lg
+            ))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+    }
+
+    /// Quieter than the title above it, so the two read as a heading and its subdivisions
+    /// rather than as two competing labels.
+    private func partHeader(_ part: DayPart) -> some View {
+        Text(part.title)
+            .textStyle(.caption)
+            .foregroundStyle(Palette.secondaryText)
+            .textCase(nil)
+            .listRowInsets(EdgeInsets(
+                top: Spacing.md, leading: Spacing.lg,
+                bottom: Spacing.xs, trailing: Spacing.lg
+            ))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+    }
+
     // MARK: - Header
 
     private var header: some View {
-        HStack(alignment: .center, spacing: Spacing.lg) {
+        HStack(alignment: .top, spacing: Spacing.lg) {
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 Text(greeting)
-                    .font(Typography.screenTitle)
+                    .textStyle(.largeTitle)
                     .foregroundStyle(Palette.primaryText)
+                    .minimumScaleFactor(Layout.titleScale)
+                    .lineLimit(1)
 
-                Text(day.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(.turkish)))
-                    .font(Typography.itemDetail)
+                Text(day.formatted(.dateTime.day().month(.wide).weekday(.wide).locale(.turkish)))
+                    .textStyle(.caption)
                     .foregroundStyle(Palette.secondaryText)
-
-                if !doses.isEmpty {
-                    Text(summary)
-                        .font(Typography.itemDetail)
-                        .foregroundStyle(isComplete ? Palette.taken : Palette.secondaryText)
-                        .padding(.top, Spacing.xs)
-                        .contentTransition(.numericText())
-                }
             }
 
             Spacer(minLength: Spacing.sm)
 
             if !doses.isEmpty {
-                ProgressRing(taken: takenCount, total: doses.count)
+                VStack(spacing: Spacing.sm) {
+                    ProgressRing(taken: takenCount, total: doses.count)
+
+                    Text(ringSummary)
+                        .textStyle(.caption)
+                        .foregroundStyle(isComplete ? Palette.taken : Palette.secondaryText)
+                        .contentTransition(.numericText())
+                }
+                .fixedSize(horizontal: true, vertical: false)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .animation(Motion.spring, value: takenCount)
     }
 
     /// Chosen by the hour, so the screen greets rather than labels.
     private var greeting: String {
         switch Calendar.current.component(.hour, from: Date()) {
-        case 5..<12: "Günaydın"
-        case 12..<18: "İyi günler"
-        default: "İyi akşamlar"
+        case 5..<11: "Günaydın"
+        case 11..<17: "İyi günler"
+        case 17..<22: "İyi akşamlar"
+        default: "İyi geceler"
+        }
+    }
+
+    /// What is left rather than what is done: the number that decides whether the user can
+    /// put the phone down.
+    private var ringSummary: String {
+        isComplete ? "Bugün tamam" : "\(doses.count - takenCount) doz kaldı"
+    }
+
+    // MARK: - Grouping
+
+    private var groups: [DoseGroup] {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: doses) { dose in
+            DayPart(hour: calendar.component(.hour, from: dose.scheduledAt))
+        }
+
+        // Walked in the order of the day rather than the dictionary's, and parts with
+        // nothing in them never appear.
+        return DayPart.allCases.compactMap { part in
+            guard let doses = grouped[part], !doses.isEmpty else { return nil }
+            return DoseGroup(part: part, doses: doses)
         }
     }
 
@@ -178,9 +247,46 @@ private struct DayDoseList: View {
         !doses.isEmpty && takenCount == doses.count
     }
 
-    private var summary: String {
-        isComplete ? "Bugünlük hepsi tamam" : "\(takenCount)/\(doses.count) doz alındı"
+}
+
+// MARK: - Parts of the day
+
+/// The four stretches a day's doses are grouped under. The bands are deliberately not the
+/// greeting's: a dose at half past ten belongs to the morning's doses, while someone opening
+/// the app at that hour is well past being greeted with "Günaydın".
+private enum DayPart: Int, CaseIterable, Identifiable {
+    case morning
+    case noon
+    case evening
+    case night
+
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .morning: "Sabah"
+        case .noon: "Öğlen"
+        case .evening: "Akşam"
+        case .night: "Gece"
+        }
     }
+
+    /// 06–11 morning, 11–17 noon, 17–22 evening, and the rest of the clock night.
+    init(hour: Int) {
+        switch hour {
+        case 6..<11: self = .morning
+        case 11..<17: self = .noon
+        case 17..<22: self = .evening
+        default: self = .night
+        }
+    }
+}
+
+private struct DoseGroup: Identifiable {
+    let part: DayPart
+    let doses: [Dose]
+
+    var id: Int { part.rawValue }
 }
 
 // MARK: - Progress ring
@@ -216,14 +322,13 @@ private struct ProgressRing: View {
 
             if isComplete {
                 Image(systemName: "checkmark")
-                    .font(Typography.ringValue)
+                    .font(.dozyIcon(.numericLarge, weight: .bold))
                     .foregroundStyle(Palette.accent)
                     .transition(.scale.combined(with: .opacity))
             } else {
                 Text("\(taken)/\(total)")
-                    .font(Typography.ringValue)
+                    .textStyle(.numericLarge)
                     .foregroundStyle(Palette.primaryText)
-                    .monospacedDigit()
                     .contentTransition(.numericText())
             }
         }

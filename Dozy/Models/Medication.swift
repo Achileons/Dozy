@@ -139,6 +139,15 @@ extension Medication {
         stockEnabled && currentStock <= lowStockThreshold
     }
 
+    /// The soonest dose still ahead of `date` and not yet taken, or `nil` when the schedule
+    /// has run out or nothing is planned.
+    func nextDose(after date: Date = Date()) -> Dose? {
+        (doses ?? [])
+            .lazy
+            .filter { !$0.isDeleted && $0.status == .pending && $0.scheduledAt >= date }
+            .min { $0.scheduledAt < $1.scheduledAt }
+    }
+
     /// Joins the amount and the unit into the line stored in `dosage`.
     static func dosageText(amount: Double, unit: DosageUnit) -> String {
         let formatted = amount.formatted(

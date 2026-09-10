@@ -16,25 +16,45 @@ struct CalendarView: View {
             ZStack {
                 Palette.surface.ignoresSafeArea()
 
-                MonthContent(
-                    month: visibleMonth,
-                    selectedDay: $selectedDay,
-                    onMoveMonth: move(by:)
-                )
-                .id(visibleMonth)
-                .transition(Motion.monthTransition)
-            }
-            .navigationTitle(visibleMonth.formatted(.dateTime.month(.wide).year().locale(.turkish)))
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    monthButton(step: -1, systemImage: "chevron.left", label: "Önceki ay")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    monthButton(step: 1, systemImage: "chevron.right", label: "Sonraki ay")
+                VStack(spacing: Spacing.md) {
+                    monthHeader
+
+                    MonthContent(
+                        month: visibleMonth,
+                        selectedDay: $selectedDay,
+                        onMoveMonth: move(by:)
+                    )
+                    .id(visibleMonth)
+                    .transition(Motion.monthTransition)
                 }
             }
+            // The month is drawn in the page, not in the bar: a large navigation title
+            // collapses as soon as the list underneath is scrolled, and the month has to
+            // stay put while the doses beneath it move.
+            .toolbar(.hidden, for: .navigationBar)
         }
         .environment(\.locale, .turkish)
+    }
+
+    private var monthHeader: some View {
+        HStack(spacing: Spacing.sm) {
+            monthButton(step: -1, systemImage: "chevron.left", label: "Önceki ay")
+
+            Spacer(minLength: Spacing.sm)
+
+            Text(visibleMonth.formatted(.dateTime.month(.wide).year().locale(.turkish)))
+                .textStyle(.title)
+                .foregroundStyle(Palette.primaryText)
+                // The name changes under a fixed frame, so it crossfades in place rather
+                // than shoving the arrows around as month lengths differ.
+                .contentTransition(.numericText())
+                .animation(Motion.gentle, value: visibleMonth)
+
+            Spacer(minLength: Spacing.sm)
+
+            monthButton(step: 1, systemImage: "chevron.right", label: "Sonraki ay")
+        }
+        .padding(.horizontal, Spacing.lg)
     }
 
     private func monthButton(step: Int, systemImage: String, label: String) -> some View {
@@ -42,7 +62,7 @@ struct CalendarView: View {
             move(by: step)
         } label: {
             Image(systemName: systemImage)
-                .font(Typography.control)
+                .font(.dozyIcon(.callout, weight: .semibold))
                 .foregroundStyle(Palette.accent)
                 .frame(width: Layout.minTouchTarget, height: Layout.minTouchTarget)
         }
@@ -106,8 +126,12 @@ private struct MonthContent: View {
     var body: some View {
         VStack(spacing: Spacing.md) {
             grid
-            selectedDayHeader
-            selectedDayContent
+                .dozyCard(padding: Spacing.md)
+                .padding(.horizontal, Spacing.lg)
+
+            monthTally
+
+            dayLayer
         }
         .sheet(isPresented: $isAddingMedication) {
             MedicationFormView()
@@ -127,7 +151,7 @@ private struct MonthContent: View {
             HStack(spacing: Spacing.xs) {
                 ForEach(Self.weekdayOrder, id: \.self) { weekday in
                     Text(ScheduleSummary.symbol(forWeekday: weekday) ?? "")
-                        .font(Typography.weekday)
+                        .textStyle(.captionStrong)
                         .foregroundStyle(Palette.secondaryText)
                         .frame(maxWidth: .infinity)
                 }
@@ -154,9 +178,41 @@ private struct MonthContent: View {
                 }
             }
         }
-        .padding(Spacing.lg)
         .contentShape(Rectangle())
         .gesture(monthSwipe)
+    }
+
+    // MARK: Day layer
+
+    /// The selected day's doses, on a plane of their own above the calendar. The grabber and
+    /// the upward shadow say the same thing the sheet shape does: this is a layer that
+    /// belongs to the day picked above it, not more of the same page.
+    private var dayLayer: some View {
+        VStack(spacing: Spacing.md) {
+            Capsule()
+                .fill(Palette.grabber)
+                .frame(width: Layout.grabberWidth, height: Layout.grabberHeight)
+                .padding(.top, Spacing.md)
+
+            selectedDayHeader
+            selectedDayContent
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background {
+            UnevenRoundedRectangle(
+                topLeadingRadius: Layout.layerCorner,
+                topTrailingRadius: Layout.layerCorner,
+                style: .continuous
+            )
+            .fill(Palette.layer)
+            .shadow(
+                color: Palette.layerShadow,
+                radius: Layout.layerShadowRadius,
+                x: 0,
+                y: Layout.layerShadowOffset
+            )
+            .ignoresSafeArea(edges: .bottom)
+        }
     }
 
     /// Swiping the grid moves between months, matching the arrows in the bar.
@@ -168,14 +224,73 @@ private struct MonthContent: View {
             }
     }
 
+    // MARK: Month tally
+
+    /// How the month went in one line, so the grid above has a caption rather than leaving
+    /// the reader to count coloured discs. Days with nothing due are left out of both
+    /// figures — they are not a success and not a failure.
+    private var monthTally: some View {
+        HStack(spacing: Spacing.sm) {
+            tallyItem(color: Palette.taken, count: tally.complete, label: "tam")
+
+            Text("·")
+                .textStyle(.caption)
+                .foregroundStyle(Palette.secondaryText)
+
+            tallyItem(color: Palette.missed, count: tally.incomplete, label: "eksik")
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Spacing.xl)
+    }
+
+    private func tallyItem(color: Color, count: Int, label: String) -> some View {
+        HStack(spacing: Spacing.xs) {
+            Circle()
+                .fill(color)
+                .frame(width: Layout.summaryDot, height: Layout.summaryDot)
+
+            Text("\(count) \(label)")
+                .textStyle(.caption)
+                .foregroundStyle(Palette.secondaryText)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Counted over the days the month actually asked something of, judged the same way the
+    /// grid judges each cell.
+    private var tally: (complete: Int, incomplete: Int) {
+        var complete = 0
+        var incomplete = 0
+
+        for (_, dayDoses) in dosesByDay {
+            switch DayStatus(doses: dayDoses, now: now) {
+            case .allTaken: complete += 1
+            case .partiallyTaken, .noneTaken: incomplete += 1
+            case .quiet: break
+            }
+        }
+
+        return (complete, incomplete)
+    }
+
     // MARK: Selected day
 
-    /// One line saying where the day stands, next to the only thing there is to do here.
+    /// The day being looked at, named rather than numbered, with where it stands underneath
+    /// and the only thing there is to do here beside it.
     private var selectedDayHeader: some View {
         HStack(spacing: Spacing.sm) {
-            Text(statusMessage)
-                .font(Typography.itemDetail)
-                .foregroundStyle(Palette.secondaryText)
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text(selectedDay.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(.turkish)))
+                    .textStyle(.title2)
+                    .foregroundStyle(Palette.primaryText)
+                    .minimumScaleFactor(Layout.titleScale)
+                    .lineLimit(1)
+
+                Text(statusMessage)
+                    .textStyle(.caption)
+                    .foregroundStyle(Palette.secondaryText)
+            }
 
             Spacer(minLength: Spacing.sm)
 
@@ -186,7 +301,7 @@ private struct MonthContent: View {
                     isAddingMedication = true
                 } label: {
                     Image(systemName: "plus")
-                        .font(Typography.control)
+                        .font(.dozyIcon(.callout, weight: .semibold))
                         .foregroundStyle(Palette.accent)
                         .frame(width: Layout.minTouchTarget, height: Layout.minTouchTarget)
                 }
@@ -347,10 +462,10 @@ private struct DayCell: View {
                 )
 
             Text(date, format: .dateTime.day())
-                .font(Typography.dayNumber)
-                .fontWeight(isToday ? .bold : .regular)
+                // A role rather than `.fontWeight`, which cannot pick Nunito-Bold out of
+                // the family the way it can a heavier system weight.
+                .textStyle(isToday ? .numericSmallStrong : .numericSmall)
                 .foregroundStyle(Palette.primaryText)
-                .monospacedDigit()
         }
         .frame(width: Layout.dayCell, height: Layout.dayCell)
         // Today is marked by weight and a dot rather than by a fill, so the fill is left

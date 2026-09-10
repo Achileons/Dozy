@@ -24,7 +24,11 @@ struct MedicationListView: View {
                 Palette.surface.ignoresSafeArea()
 
                 if medications.isEmpty {
-                    EmptyState(icon: "pills.fill", message: "Henüz ilaç yok") {
+                    EmptyState(
+                        icon: "pills.fill",
+                        title: "Henüz ilaç yok",
+                        detail: "Eklediğin ilaçlar ve programları burada görünecek."
+                    ) {
                         isAddingMedication = true
                     }
                 } else {
@@ -38,7 +42,7 @@ struct MedicationListView: View {
                         isAddingMedication = true
                     } label: {
                         Image(systemName: "plus")
-                            .font(Typography.control)
+                            .font(.dozyIcon(.callout, weight: .semibold))
                             .foregroundStyle(Palette.accent)
                             .frame(width: Layout.minTouchTarget, height: Layout.minTouchTarget)
                     }
@@ -58,8 +62,30 @@ struct MedicationListView: View {
         }
     }
 
+    /// What the whole list adds up to: how many medications, and how many times a day they
+    /// ask for something. Averaged, so a rule that skips days does not read as a daily one.
+    private var summary: String {
+        let perDay = medications.reduce(0) { running, medication in
+            running + StockCalculator.dailyDoseCount(for: medication)
+        }
+        let formatted = perDay.formatted(
+            .number.precision(.fractionLength(0...1)).locale(.turkish)
+        )
+        return "\(medications.count) ilaç · \(formatted) doz/gün"
+    }
+
     private var list: some View {
         List {
+            Text(summary)
+                .textStyle(.callout)
+                .foregroundStyle(Palette.secondaryText)
+                .listRowInsets(EdgeInsets(
+                    top: Spacing.sm, leading: Spacing.lg,
+                    bottom: 0, trailing: Spacing.lg
+                ))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+
             ForEach(medications) { medication in
                 MedicationRow(medication: medication)
                     .contentShape(RoundedRectangle(cornerRadius: Layout.cardCorner, style: .continuous))
@@ -106,40 +132,76 @@ private struct MedicationRow: View {
                         .frame(width: Layout.medicationDot, height: Layout.medicationDot)
 
                     Text(medication.name)
-                        .font(Typography.itemTitle)
+                        .textStyle(.headline)
                         .foregroundStyle(Palette.primaryText)
                 }
+                .padding(.trailing, medication.stockEnabled ? Layout.stockIcon : 0)
 
                 if !medication.dosage.isEmpty {
                     Text(medication.dosage)
-                        .font(Typography.itemDetail)
+                        .textStyle(.body)
                         .foregroundStyle(Palette.secondaryText)
                 }
 
                 Text(ScheduleSummary.text(for: medication.schedules?.first))
-                    .font(Typography.meta)
+                    .textStyle(.caption)
                     .foregroundStyle(Palette.secondaryText)
+
+                if let next = nextDoseText {
+                    Text(next)
+                        .textStyle(.caption)
+                        .foregroundStyle(Palette.accent)
+                }
 
                 // Only shown while the medication counts its package, and tinted once that
                 // package is down to the threshold the user set.
                 if let stock = StockCalculator.summary(for: medication) {
                     Text(stock)
-                        .font(Typography.meta)
-                        .foregroundStyle(
-                            medication.isLowOnStock ? Palette.missed : Palette.secondaryText
-                        )
+                        .textStyle(.caption)
+                        .foregroundStyle(medication.stockTextTint)
                 }
             }
 
             Spacer(minLength: Spacing.sm)
 
             Image(systemName: "chevron.right")
-                .font(Typography.meta.weight(.semibold))
+                .font(.dozyIcon(.caption, weight: .semibold))
                 .foregroundStyle(Palette.pending)
         }
         .frame(minHeight: Layout.minTouchTarget)
-        .dozyCard()
+        // Only a medication counting its package has a level to report. It sits in the
+        // corner, clear of the chevron, so the row reads the same with or without it.
+        .overlay(alignment: .topTrailing) {
+            if medication.stockEnabled {
+                StockIndicator(
+                    fraction: medication.stockFraction,
+                    tint: medication.stockTint
+                )
+            }
+        }
+        // The stripe and the pill are the same colour by construction: both ask the
+        // medication what its package has to say.
+        .dozyCard(stripe: medication.stockTint)
         .accessibilityElement(children: .combine)
+    }
+
+    /// When this medication is next due. Named relatively for the two days that have names,
+    /// since "yarın 08:00" is read faster than a date is.
+    private var nextDoseText: String? {
+        guard let next = medication.nextDose() else { return nil }
+
+        let calendar = Calendar.current
+        let time = next.scheduledAt.formatted(.dateTime.hour().minute().locale(.turkish))
+
+        if calendar.isDateInToday(next.scheduledAt) {
+            return "Sonraki: bugün \(time)"
+        }
+        if calendar.isDateInTomorrow(next.scheduledAt) {
+            return "Sonraki: yarın \(time)"
+        }
+
+        let day = next.scheduledAt.formatted(.dateTime.day().month(.wide).locale(.turkish))
+        return "Sonraki: \(day) \(time)"
     }
 }
 

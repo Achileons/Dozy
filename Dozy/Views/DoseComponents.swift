@@ -6,9 +6,11 @@
 import SwiftUI
 import SwiftData
 
-/// One dose, with every way of acting on it attached: tapping toggles it, swiping marks it
-/// taken, and a long press opens the rest. Shared by the today and calendar screens so both
-/// behave identically.
+/// One dose, with every way of acting on it attached: tapping toggles it and a long press
+/// opens the rest. Shared by the today and calendar screens so both behave identically.
+///
+/// There is no swipe: a tap already does the one thing a swipe would, and a row that slides
+/// under the thumb only gets in the way of the list it sits in.
 struct DoseRow: View {
     @Environment(\.modelContext) private var modelContext
 
@@ -34,14 +36,6 @@ struct DoseRow: View {
             ))
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
-            .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                Button {
-                    setStatus(.taken)
-                } label: {
-                    Label("Aldım", systemImage: DoseStatus.taken.iconName)
-                }
-                .tint(Palette.taken)
-            }
     }
 
     // MARK: - Card
@@ -49,7 +43,7 @@ struct DoseRow: View {
     private var card: some View {
         HStack(spacing: Spacing.md) {
             Image(systemName: dose.status.iconName)
-                .font(.system(size: Layout.statusIcon))
+                .font(.dozyIcon(size: Layout.statusIcon))
                 .foregroundStyle(dose.status.tint)
                 .contentTransition(.symbolEffect(.replace))
                 .symbolEffect(.bounce, value: dose.status)
@@ -61,13 +55,13 @@ struct DoseRow: View {
                         .frame(width: Layout.medicationDot, height: Layout.medicationDot)
 
                     Text(dose.medication?.name ?? "İlaç")
-                        .font(Typography.itemTitle)
+                        .textStyle(.headline)
                         .foregroundStyle(Palette.primaryText)
                 }
 
                 if let dosage = dose.medication?.dosage, !dosage.isEmpty {
                     Text(dosage)
-                        .font(Typography.itemDetail)
+                        .textStyle(.body)
                         .foregroundStyle(Palette.secondaryText)
                 }
             }
@@ -75,9 +69,8 @@ struct DoseRow: View {
             Spacer(minLength: Spacing.sm)
 
             Text(dose.scheduledAt, format: .dateTime.hour().minute())
-                .font(Typography.time)
+                .textStyle(.numeric)
                 .foregroundStyle(Palette.primaryText)
-                .monospacedDigit()
         }
         .frame(minHeight: Layout.minTouchTarget)
         // Only the content recedes once a dose is handled; the card surface itself stays
@@ -127,7 +120,7 @@ struct AddMedicationButton: View {
     var body: some View {
         Button(action: action) {
             Label("İlaç ekle", systemImage: "plus")
-                .font(Typography.control)
+                .textStyle(.callout)
                 .foregroundStyle(Palette.accentLabel)
                 .frame(maxWidth: .infinity, minHeight: Layout.actionButton)
                 .background(
@@ -146,28 +139,23 @@ struct EmptyIcon: View {
 
     var body: some View {
         Image(systemName: systemName)
-            .font(.system(size: Layout.emptyIcon, weight: .light))
+            .font(.dozyIcon(size: Layout.emptyIcon, weight: .light))
             .foregroundStyle(Palette.accent)
             .symbolRenderingMode(.hierarchical)
     }
 }
 
-/// An icon, one line and one large button — nothing to read, one thing to do.
+/// An icon, a name for what is missing, a line saying what to do about it, and the button
+/// that does it.
 struct EmptyState: View {
     let icon: String
-    let message: String
+    let title: String
+    let detail: String
     let action: () -> Void
 
     var body: some View {
         VStack(spacing: Spacing.xl) {
-            VStack(spacing: Spacing.md) {
-                EmptyIcon(systemName: icon)
-
-                Text(message)
-                    .font(Typography.emptyTitle)
-                    .foregroundStyle(Palette.primaryText)
-            }
-
+            EmptyPlaceholder(icon: icon, title: title, detail: detail)
             AddMedicationButton(action: action)
         }
         .padding(.vertical, Spacing.xl)
@@ -178,17 +166,40 @@ struct EmptyState: View {
 /// today simply has nothing to show. No button, because the bar already carries one.
 struct EmptyMessage: View {
     let icon: String
-    let message: String
+    let title: String
+    var detail: String?
+
+    var body: some View {
+        EmptyPlaceholder(icon: icon, title: title, detail: detail)
+            .padding(Spacing.xl)
+    }
+}
+
+/// The shared body of both: the icon, the serif title, and the sentence under it.
+struct EmptyPlaceholder: View {
+    let icon: String
+    let title: String
+    var detail: String?
 
     var body: some View {
         VStack(spacing: Spacing.md) {
             EmptyIcon(systemName: icon)
 
-            Text(message)
-                .font(Typography.emptyTitle)
-                .foregroundStyle(Palette.primaryText)
+            VStack(spacing: Spacing.sm) {
+                Text(title)
+                    .textStyle(.title2)
+                    .foregroundStyle(Palette.primaryText)
+                    .multilineTextAlignment(.center)
+
+                if let detail {
+                    Text(detail)
+                        .textStyle(.body)
+                        .foregroundStyle(Palette.secondaryText)
+                        .multilineTextAlignment(.center)
+                }
+            }
         }
-        .padding(Spacing.xl)
+        .padding(.horizontal, Spacing.lg)
     }
 }
 

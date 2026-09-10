@@ -41,10 +41,25 @@ enum StockCalculator {
         return "\(medication.stockText) · \(days) gün"
     }
 
+    /// How many doses a day the medication asks for on average — times taken, not units
+    /// swallowed. The same averaging as `dailyConsumption`, which is that figure weighted
+    /// by how much one dose is.
+    static func dailyDoseCount(for medication: Medication) -> Double {
+        (medication.schedules ?? []).reduce(0) { running, schedule in
+            running + dailyOccurrences(for: schedule)
+        }
+    }
+
     // MARK: - Helpers
 
     private static func dailyConsumption(for schedule: Schedule, amount: Double) -> Double {
-        let perActiveDay = Double(schedule.times.count) * amount
+        dailyOccurrences(for: schedule) * amount
+    }
+
+    /// How often a day the schedule comes round, averaged over the week or the interval so
+    /// a rule that skips days reads as a fraction rather than as a run of empty ones.
+    private static func dailyOccurrences(for schedule: Schedule) -> Double {
+        let perActiveDay = Double(schedule.times.count)
         guard perActiveDay > 0 else { return 0 }
 
         switch schedule.repeatRule {
