@@ -1,1 +1,57 @@
 __pycache__/
+
+# Local secrets and credentials
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.mobileprovision
+credentials.json
+credentials.*.json
+client_secret*.json
+service-account*.json
+.netrc
+.npmrc
+.pypirc
+.aws/
+.ssh/
+
+# Generated files, local data, and editor state
+.DS_Store
+node_modules/
+build/
+dist/
+.venv/
+venv/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+*.log
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+*.store
+*.store-*
+.idea/
+.vscode/
+*.swp
+
+# Xcode local state, build products, and signing files
+xcuserdata/
+*.xcuserstate
+DerivedData/
+.build/
+*.xcarchive
+*.ipa
+*.dSYM/
+
+# Bundled public medication catalog required by the app
+!Dozy/Resources/medications.db
